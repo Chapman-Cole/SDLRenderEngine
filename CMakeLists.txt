@@ -33,6 +33,8 @@ set(BUILTIN_SHADER_SOURCES
     rectangle.frag
     circle.vert
     circle.frag
+    text.vert
+    text.frag
 )
 
 set(BUILTIN_SHADER_FILES "")
@@ -64,10 +66,23 @@ add_custom_target(BuiltinShaders ALL DEPENDS ${BUILTIN_SHADER_FILES})
 
 # Handle source files
 
-add_executable(main main.c AppContext.c RenderContext.c Shaders.c GPUBuffers.c DrawFunctions.c)
+add_executable(main main.c AppContext.c RenderContext.c Shaders.c GPUBuffers.c DrawFunctions.c GPUText.c)
 
-find_package(SDL3 REQUIRED) 
+find_package(SDL3 REQUIRED)
 
-target_link_libraries(main PRIVATE SDL3)
+# Find SDL_ttf on system path
+find_path(sdl_ttf_header_path NAMES SDL3_ttf)
+if(NOT DEFINED sdl_ttf_header_path)
+    message(FATAL_ERROR "Could not find SDL3_ttf headers on system path.")
+endif()
+
+find_library(sdl_ttf_library_path NAMES SDL3_ttf)
+if (NOT DEFINED sdl_ttf_library_path)
+    message(FATAL_ERROR "Could not find SDL3_ttf library path.")
+endif()
+
+target_include_directories(main PRIVATE ${sdl_ttf_header_path})
+
+target_link_libraries(main PRIVATE SDL3 ${sdl_ttf_library_path})
 
 add_dependencies(main BuiltinShaders CompiledShaders)

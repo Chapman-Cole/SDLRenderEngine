@@ -78,3 +78,31 @@ void DrawCircle(RenderContext* renderContext, float center[2], float radius, flo
 
     SDL_DrawGPUPrimitives(renderContext->renderPass, 6, 1, 0, 0);
 }
+
+void DrawText(RenderContext* renderContext, GPUText* text) {
+    SDL_BindGPUGraphicsPipeline(
+        renderContext->renderPass,
+        renderContext->appContext->builtinPipelines[BUILTIN_PIPELINE_TEXT]
+    );
+
+    SDL_BindGPUVertexBuffers(
+        renderContext->renderPass,
+        0,
+        (SDL_GPUBufferBinding[]){{
+            .buffer = text->vertexBuffer,
+            .offset = 0,
+        }},
+        1
+    );
+
+    SDL_BindGPUIndexBuffer(
+        renderContext->renderPass,
+        &(SDL_GPUBufferBinding){
+            .buffer = text->indexBuffer,
+            .offset = 0
+        },
+        SDL_GPU_INDEXELEMENTSIZE_32BIT
+    );
+
+    SDL_DrawGPUIndexedPrimitives(renderContext->renderPass, text->numIndices, 1, 0, 0, 0);
+}
