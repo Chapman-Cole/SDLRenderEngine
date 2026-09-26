@@ -6,6 +6,17 @@
 #include "shaders/builtin/headers/text.frag.h"
 #include "shaders/builtin/headers/text.vert.h"
 
+static SDL_GPUColorTargetBlendState DefaultBlendState = {
+    .enable_blend = true,
+    .color_blend_op = SDL_GPU_BLENDOP_ADD,
+    .alpha_blend_op = SDL_GPU_BLENDOP_ADD,
+    .src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA,
+    .dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+    .src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA,
+    .dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+    .enable_color_write_mask = 0,
+};
+
 static inline int AppContextLoadRectanglePipeline(AppContext* app_context) {
     SDL_GPUShader* rectangleVertexShader = SDL_CreateGPUShader(
         app_context->device,
@@ -51,9 +62,17 @@ static inline int AppContextLoadRectanglePipeline(AppContext* app_context) {
         &(SDL_GPUGraphicsPipelineCreateInfo){
             .target_info = {
                 .num_color_targets = 1,
-                .color_target_descriptions = (SDL_GPUColorTargetDescription[]){{.format = SDL_GetGPUSwapchainTextureFormat(app_context->device, app_context->window)}},
+                .color_target_descriptions = (SDL_GPUColorTargetDescription[]){{
+                    .format = SDL_GetGPUSwapchainTextureFormat(app_context->device, app_context->window),
+                    .blend_state = DefaultBlendState,
+                }},
             },
-            .vertex_input_state = (SDL_GPUVertexInputState){.num_vertex_buffers = 0, .vertex_buffer_descriptions = NULL, .num_vertex_attributes = 0, .vertex_attributes = NULL},
+            .vertex_input_state = (SDL_GPUVertexInputState){
+                .num_vertex_buffers = 0,
+                .vertex_buffer_descriptions = NULL,
+                .num_vertex_attributes = 0,
+                .vertex_attributes = NULL,
+            },
             .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
             .vertex_shader = rectangleVertexShader,
             .fragment_shader = rectangleFragmentShader,
@@ -115,9 +134,17 @@ static inline int AppContextLoadCirclePipeline(AppContext* app_context) {
         &(SDL_GPUGraphicsPipelineCreateInfo){
             .target_info = {
                 .num_color_targets = 1,
-                .color_target_descriptions = (SDL_GPUColorTargetDescription[]){{.format = SDL_GetGPUSwapchainTextureFormat(app_context->device, app_context->window)}},
+                .color_target_descriptions = (SDL_GPUColorTargetDescription[]){{
+                    .format = SDL_GetGPUSwapchainTextureFormat(app_context->device, app_context->window),
+                    .blend_state = DefaultBlendState,
+                }},
             },
-            .vertex_input_state = (SDL_GPUVertexInputState){.num_vertex_buffers = 0, .vertex_buffer_descriptions = NULL, .num_vertex_attributes = 0, .vertex_attributes = NULL},
+            .vertex_input_state = (SDL_GPUVertexInputState){
+                .num_vertex_buffers = 0,
+                .vertex_buffer_descriptions = NULL,
+                .num_vertex_attributes = 0,
+                .vertex_attributes = NULL,
+            },
             .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
             .vertex_shader = circleVertexShader,
             .fragment_shader = circleFragmentShader,
@@ -145,7 +172,7 @@ static inline int AppContextLoadTextPipeline(AppContext* app_context) {
             .num_samplers = 0,
             .num_storage_buffers = 0,
             .num_storage_textures = 0,
-            .num_uniform_buffers = 0, // Update this as needed
+            .num_uniform_buffers = 1, // Update this as needed
             .props = 0,
             .entrypoint = "main"});
 
@@ -161,12 +188,13 @@ static inline int AppContextLoadTextPipeline(AppContext* app_context) {
             .code_size = text_frag_source_len,
             .format = SDL_GPU_SHADERFORMAT_SPIRV,
             .stage = SDL_GPU_SHADERSTAGE_FRAGMENT,
-            .num_samplers = 0,
+            .num_samplers = 1,
             .num_storage_buffers = 0,
             .num_storage_textures = 0,
             .num_uniform_buffers = 0, // Update this as needed
             .props = 0,
-            .entrypoint = "main"});
+            .entrypoint = "main",
+        });
 
     if (textFragmentShader == NULL) {
         SDL_ReleaseGPUShader(app_context->device, textVertexShader);
@@ -181,12 +209,39 @@ static inline int AppContextLoadTextPipeline(AppContext* app_context) {
                 .num_color_targets = 1,
                 .color_target_descriptions = (SDL_GPUColorTargetDescription[]){{
                     .format = SDL_GetGPUSwapchainTextureFormat(app_context->device, app_context->window),
+                    .blend_state = DefaultBlendState,
                 }},
             },
-            .vertex_input_state = (SDL_GPUVertexInputState){.num_vertex_buffers = 1, .vertex_buffer_descriptions = (SDL_GPUVertexBufferDescription[]){{.slot = 0, .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX, .instance_step_rate = 0, .pitch = sizeof(SDL_FPoint)}}, .num_vertex_attributes = 1, .vertex_attributes = (SDL_GPUVertexAttribute[]){{.buffer_slot = 0, .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2, .location = 0, .offset = 0}}},
+            .vertex_input_state = (SDL_GPUVertexInputState){
+                .num_vertex_buffers = 1,
+                .vertex_buffer_descriptions = (SDL_GPUVertexBufferDescription[]){
+                    {
+                        .slot = 0,
+                        .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
+                        .instance_step_rate = 0,
+                        .pitch = 2 * sizeof(SDL_FPoint),
+                    },
+                },
+                .num_vertex_attributes = 2,
+                .vertex_attributes = (SDL_GPUVertexAttribute[]){
+                    {
+                        .buffer_slot = 0,
+                        .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+                        .location = 0,
+                        .offset = 0,
+                    },
+                    {
+                        .buffer_slot = 0,
+                        .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+                        .location = 1,
+                        .offset = 2 * sizeof(float),
+                    },
+                },
+            },
             .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
             .vertex_shader = textVertexShader,
-            .fragment_shader = textFragmentShader});
+            .fragment_shader = textFragmentShader,
+        });
 
     SDL_ReleaseGPUShader(app_context->device, textVertexShader);
     SDL_ReleaseGPUShader(app_context->device, textFragmentShader);
@@ -233,6 +288,19 @@ int AppContextInit(AppContext* app_context, SDL_WindowFlags windowFlags) {
         return -1;
     }
 
+    app_context->textSampler = SDL_CreateGPUSampler(
+        app_context->device,
+        &(SDL_GPUSamplerCreateInfo){
+            .min_filter = SDL_GPU_FILTER_LINEAR,
+            .mag_filter = SDL_GPU_FILTER_LINEAR,
+            .mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_LINEAR,
+            .address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+            .address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+            .address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+        });
+
+    app_context->displayScale = SDL_GetWindowDisplayScale(app_context->window);
+
     if (!AppContextLoadRectanglePipeline(app_context)) {
         return -1;
     }
@@ -249,13 +317,18 @@ int AppContextInit(AppContext* app_context, SDL_WindowFlags windowFlags) {
 }
 
 int AppContextTerminate(AppContext* app_context) {
+    SDL_ReleaseGPUSampler(app_context->device, app_context->textSampler);
+
     SDL_ReleaseGPUGraphicsPipeline(app_context->device, app_context->builtinPipelines[BUILTIN_PIPELINE_RECTANGLE]);
     SDL_ReleaseGPUGraphicsPipeline(app_context->device, app_context->builtinPipelines[BUILTIN_PIPELINE_CIRCLE]);
     SDL_ReleaseGPUGraphicsPipeline(app_context->device, app_context->builtinPipelines[BUILTIN_PIPELINE_TEXT]);
+
+    TTF_DestroyGPUTextEngine(app_context->textEngine);
+    TTF_Quit();
+
     SDL_ReleaseWindowFromGPUDevice(app_context->device, app_context->window);
     SDL_DestroyWindow(app_context->window);
     SDL_DestroyGPUDevice(app_context->device);
-    TTF_DestroyGPUTextEngine(app_context->textEngine);
-    TTF_Quit();
+
     return 0;
 }

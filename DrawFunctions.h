@@ -10,6 +10,6 @@ void DrawRectangleRounded(RenderContext* renderContext, float center[2], float s
 
 void DrawCircle(RenderContext* renderContext, float center[2], float radius, float color[4]);
 
-void DrawText(RenderContext* renderContext, GPUText* text);
+void DrawText(RenderContext* renderContext, GPUText* text, float position[2]);
 
 #endif

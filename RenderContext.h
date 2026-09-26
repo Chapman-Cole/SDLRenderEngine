@@ -9,6 +9,8 @@ typedef struct RenderContext {
     SDL_GPUCommandBuffer* cmdbuf;
     SDL_GPUTexture* texture; // will typically be the swapchain texture
     SDL_GPURenderPass* renderPass;
+    float renderWidth;
+    float renderHeight;
     float aspectRatio;
 } RenderContext;
 

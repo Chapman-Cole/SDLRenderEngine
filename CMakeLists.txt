@@ -66,7 +66,20 @@ add_custom_target(BuiltinShaders ALL DEPENDS ${BUILTIN_SHADER_FILES})
 
 # Handle source files
 
-add_executable(main main.c AppContext.c RenderContext.c Shaders.c GPUBuffers.c DrawFunctions.c GPUText.c)
+add_executable(main 
+    main.c 
+    AppContext.c 
+    RenderContext.c 
+    Shaders.c 
+    GPUBuffers.c 
+    DrawFunctions.c 
+    GPUText.c
+    FontRegistry.c
+)
+
+# enable address sanitization
+target_compile_options(main PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+target_link_options(main PRIVATE -fsanitize=address)
 
 find_package(SDL3 REQUIRED)
 

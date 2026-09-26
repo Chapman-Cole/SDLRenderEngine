@@ -79,30 +79,60 @@ void DrawCircle(RenderContext* renderContext, float center[2], float radius, flo
     SDL_DrawGPUPrimitives(renderContext->renderPass, 6, 1, 0, 0);
 }
 
-void DrawText(RenderContext* renderContext, GPUText* text) {
+void DrawText(RenderContext* renderContext, GPUText* text, float position[2]) {
+    // If the number of lines is 0, then just skip rendering entirely
+    if (text->text->num_lines == 0) {
+        return;
+    }
+
     SDL_BindGPUGraphicsPipeline(
         renderContext->renderPass,
-        renderContext->appContext->builtinPipelines[BUILTIN_PIPELINE_TEXT]
-    );
+        renderContext->appContext->builtinPipelines[BUILTIN_PIPELINE_TEXT]);
 
-    SDL_BindGPUVertexBuffers(
-        renderContext->renderPass,
+    SDL_PushGPUVertexUniformData(
+        renderContext->cmdbuf,
         0,
-        (SDL_GPUBufferBinding[]){{
-            .buffer = text->vertexBuffer,
-            .offset = 0,
-        }},
-        1
-    );
-
-    SDL_BindGPUIndexBuffer(
-        renderContext->renderPass,
-        &(SDL_GPUBufferBinding){
-            .buffer = text->indexBuffer,
-            .offset = 0
+        (float[48]){
+            (float)text->width,
+            (float)text->height, // text size
+            (float)text->x,
+            (float)text->y, // text internal position
+            renderContext->renderWidth,
+            renderContext->renderHeight,             // Window Dimensions
+            renderContext->aspectRatio,              // aspect ratio
+            renderContext->appContext->displayScale, // display scale for high dpi screens
+            position[0], position[1],                // Text offset/position
+            0, 0                                     // padding
         },
-        SDL_GPU_INDEXELEMENTSIZE_32BIT
-    );
+        48);
 
-    SDL_DrawGPUIndexedPrimitives(renderContext->renderPass, text->numIndices, 1, 0, 0, 0);
+    for (Uint32 i = 0; i < text->numAtlasses; i++) {
+
+        SDL_BindGPUVertexBuffers(
+            renderContext->renderPass,
+            0,
+            (SDL_GPUBufferBinding[]){{
+                .buffer = text->atlasses[i].vertexBuffer,
+                .offset = 0,
+            }},
+            1);
+
+        SDL_BindGPUIndexBuffer(
+            renderContext->renderPass,
+            &(SDL_GPUBufferBinding){
+                .buffer = text->atlasses[i].indexBuffer,
+                .offset = 0},
+            SDL_GPU_INDEXELEMENTSIZE_32BIT);
+
+        SDL_BindGPUFragmentSamplers(
+            renderContext->renderPass,
+            0,
+            (SDL_GPUTextureSamplerBinding[]){{
+                .sampler = renderContext->appContext->textSampler,
+                .texture = text->atlasses[0].atlas,
+            }},
+            1);
+
+        SDL_DrawGPUIndexedPrimitives(renderContext->renderPass, text->atlasses[i].numIndices, 1, 0, 0, 0);
+    }
 }

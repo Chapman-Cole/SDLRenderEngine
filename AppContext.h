@@ -20,6 +20,8 @@ typedef struct AppContext {
     SDL_GPUDevice* device;
     TTF_TextEngine* textEngine;
     SDL_GPUGraphicsPipeline* builtinPipelines[APP_CONTEXT_BUILTIN_PIPELINES_MAX];
+    SDL_GPUSampler* textSampler;
+    float displayScale;
 } AppContext;
 
 int AppContextInit(AppContext* app_context, SDL_WindowFlags windowFlags);
