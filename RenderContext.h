@@ -3,6 +3,7 @@
 
 #include "SDL3/SDL.h"
 #include "AppContext.h"
+#include "InputContext.h"
 
 typedef struct RenderContext {
     AppContext* appContext;

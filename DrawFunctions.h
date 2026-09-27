@@ -12,4 +12,6 @@ void DrawCircle(RenderContext* renderContext, float center[2], float radius, flo
 
 void DrawText(RenderContext* renderContext, GPUText* text, float position[2]);
 
+void DrawInputContext(RenderContext* renderContext, InputContext* inputContext, float position[2]);
+
 #endif

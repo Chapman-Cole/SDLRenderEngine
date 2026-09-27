@@ -9,15 +9,24 @@ typedef struct TextVertex {
 } TextVertex;
 
 static inline int generateGPUBuffers(GPUText* renderText, AppContext* appContext) {
-    // If the number of lines is 0, skip rendering entirely
-    if (renderText->text->num_lines == 0) {
-        return 0;
-    }
-
+    // Make sure the error message doesn't contain any persistent errors that would mess up
+    // the logic to determine whether or not the sequence being NULL is a true error
+    // or simply because there is nothing to render
+    SDL_ClearError();
     TTF_GPUAtlasDrawSequence* sequence = TTF_GetGPUTextDrawData(renderText->text);
     if (sequence == NULL) {
-        SDL_Log("Failed to create TTF_GPUAtlasDrawSequence: %s", SDL_GetError());
-        return -1;
+        const char* errorMessage = SDL_GetError();
+
+        if (SDL_strlen(errorMessage) > 0) {
+            SDL_Log("Failed to create TTF_GPUAtlasDrawSequence: %s", SDL_GetError());
+            return -1;
+        } else {
+            // If the error message is an empty string (meaning it has a length of zero), then
+            // that just means there simply is nothing to render
+            renderText->numAtlasses = 0;
+            renderText->atlasses = NULL;
+            return 0;
+        }
     }
 
     Uint32 numAtlasses = 0;

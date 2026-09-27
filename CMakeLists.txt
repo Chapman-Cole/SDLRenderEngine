@@ -35,6 +35,8 @@ set(BUILTIN_SHADER_SOURCES
     circle.frag
     text.vert
     text.frag
+    textcursor.vert
+    textcursor.frag
 )
 
 set(BUILTIN_SHADER_FILES "")
@@ -75,11 +77,12 @@ add_executable(main
     DrawFunctions.c 
     GPUText.c
     FontRegistry.c
+    InputContext.c
 )
 
 # enable address sanitization
-target_compile_options(main PRIVATE -fsanitize=address -fno-omit-frame-pointer)
-target_link_options(main PRIVATE -fsanitize=address)
+#target_compile_options(main PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+#target_link_options(main PRIVATE -fsanitize=address)
 
 find_package(SDL3 REQUIRED)
 

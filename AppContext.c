@@ -5,6 +5,8 @@
 #include "shaders/builtin/headers/rectangle.vert.h"
 #include "shaders/builtin/headers/text.frag.h"
 #include "shaders/builtin/headers/text.vert.h"
+#include "shaders/builtin/headers/textcursor.frag.h"
+#include "shaders/builtin/headers/textcursor.vert.h"
 
 static SDL_GPUColorTargetBlendState DefaultBlendState = {
     .enable_blend = true,
@@ -174,7 +176,8 @@ static inline int AppContextLoadTextPipeline(AppContext* app_context) {
             .num_storage_textures = 0,
             .num_uniform_buffers = 1, // Update this as needed
             .props = 0,
-            .entrypoint = "main"});
+            .entrypoint = "main",
+        });
 
     if (textVertexShader == NULL) {
         SDL_Log("Failed to create textVertexShader: %s", SDL_GetError());
@@ -254,6 +257,99 @@ static inline int AppContextLoadTextPipeline(AppContext* app_context) {
     return true;
 }
 
+static inline int AppContextLoadTextCursorPipeline(AppContext* app_context) {
+    SDL_GPUShader* textCursorVertexShader = SDL_CreateGPUShader(
+        app_context->device,
+        &(SDL_GPUShaderCreateInfo){
+            .code = textcursor_vert_source,
+            .code_size = textcursor_vert_source_len,
+            .format = SDL_GPU_SHADERFORMAT_SPIRV,
+            .stage = SDL_GPU_SHADERSTAGE_VERTEX,
+            .num_samplers = 0,
+            .num_storage_buffers = 0,
+            .num_storage_textures = 0,
+            .num_uniform_buffers = 1, // Update this as needed
+            .props = 0,
+            .entrypoint = "main"});
+
+    if (textCursorVertexShader == NULL) {
+        SDL_Log("Failed to create textCursorVertexShader: %s", SDL_GetError());
+        return -1;
+    }
+
+    SDL_GPUShader* textCursorFragmentShader = SDL_CreateGPUShader(
+        app_context->device,
+        &(SDL_GPUShaderCreateInfo){
+            .code = textcursor_frag_source,
+            .code_size = textcursor_frag_source_len,
+            .format = SDL_GPU_SHADERFORMAT_SPIRV,
+            .stage = SDL_GPU_SHADERSTAGE_FRAGMENT,
+            .num_samplers = 0,
+            .num_storage_buffers = 0,
+            .num_storage_textures = 0,
+            .num_uniform_buffers = 0, // Update this as needed
+            .props = 0,
+            .entrypoint = "main",
+        });
+
+    if (textCursorFragmentShader == NULL) {
+        SDL_ReleaseGPUShader(app_context->device, textCursorVertexShader);
+        SDL_Log("Failed to create textCursorFragmentShader: %s", SDL_GetError());
+        return -1;
+    }
+
+    app_context->builtinPipelines[BUILTIN_PIPELINE_TEXT_CURSOR] = SDL_CreateGPUGraphicsPipeline(
+        app_context->device,
+        &(SDL_GPUGraphicsPipelineCreateInfo){
+            .target_info = {
+                .num_color_targets = 1,
+                .color_target_descriptions = (SDL_GPUColorTargetDescription[]){{
+                    .format = SDL_GetGPUSwapchainTextureFormat(app_context->device, app_context->window),
+                    .blend_state = DefaultBlendState,
+                }},
+            },
+            .vertex_input_state = (SDL_GPUVertexInputState){
+                .num_vertex_buffers = 1,
+                .vertex_buffer_descriptions = (SDL_GPUVertexBufferDescription[]){
+                    {
+                        .slot = 0,
+                        .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
+                        .instance_step_rate = 0,
+                        .pitch = 2 * sizeof(SDL_FPoint),
+                    },
+                },
+                .num_vertex_attributes = 2,
+                .vertex_attributes = (SDL_GPUVertexAttribute[]){
+                    {
+                        .buffer_slot = 0,
+                        .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+                        .location = 0,
+                        .offset = 0,
+                    },
+                    {
+                        .buffer_slot = 0,
+                        .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+                        .location = 1,
+                        .offset = 2 * sizeof(float),
+                    },
+                },
+            },
+            .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
+            .vertex_shader = textCursorVertexShader,
+            .fragment_shader = textCursorFragmentShader,
+        });
+
+    SDL_ReleaseGPUShader(app_context->device, textCursorVertexShader);
+    SDL_ReleaseGPUShader(app_context->device, textCursorFragmentShader);
+
+    if (app_context->builtinPipelines[BUILTIN_PIPELINE_TEXT_CURSOR] == NULL) {
+        SDL_Log("Failed to create text cursor graphics pipeline: %s", SDL_GetError());
+        return false;
+    }
+
+    return true;
+}
+
 int AppContextInit(AppContext* app_context, SDL_WindowFlags windowFlags) {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         SDL_Log("Failed to initialize video subsystem: %s", SDL_GetError());
@@ -313,6 +409,10 @@ int AppContextInit(AppContext* app_context, SDL_WindowFlags windowFlags) {
         return -1;
     }
 
+    if (!AppContextLoadTextCursorPipeline(app_context)) {
+        return -1;
+    }
+
     return 0;
 }
 
@@ -322,6 +422,7 @@ int AppContextTerminate(AppContext* app_context) {
     SDL_ReleaseGPUGraphicsPipeline(app_context->device, app_context->builtinPipelines[BUILTIN_PIPELINE_RECTANGLE]);
     SDL_ReleaseGPUGraphicsPipeline(app_context->device, app_context->builtinPipelines[BUILTIN_PIPELINE_CIRCLE]);
     SDL_ReleaseGPUGraphicsPipeline(app_context->device, app_context->builtinPipelines[BUILTIN_PIPELINE_TEXT]);
+    SDL_ReleaseGPUGraphicsPipeline(app_context->device, app_context->builtinPipelines[BUILTIN_PIPELINE_TEXT_CURSOR]);
 
     TTF_DestroyGPUTextEngine(app_context->textEngine);
     TTF_Quit();

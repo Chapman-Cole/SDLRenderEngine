@@ -3,6 +3,7 @@
 #include "FontRegistry.h"
 #include "GPUBuffers.h"
 #include "GPUText.h"
+#include "InputContext.h"
 #include "RenderContext.h"
 #include "Shaders.h"
 #include <SDL3/SDL.h>
@@ -31,12 +32,6 @@ int main(int argc, char* argv[]) {
     FontRegistryCreate(&fontRegistry, &appContext);
     FontRegistrySet(&fontRegistry, "Hack-Regular15", "/usr/share/fonts/source-foundry-hack-fonts/Hack-Regular.ttf", 15.0f);
 
-    GPUText inputText;
-    GPUTextCreate(&inputText, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"), "");
-
-    int logicalWindowWidth, logicalWindowHeight;
-    SDL_GetWindowSize(appContext.window, &logicalWindowWidth, &logicalWindowHeight);
-
     SDL_StartTextInput(appContext.window);
 
     float scaleFactor = 0.0f;
@@ -44,42 +39,35 @@ int main(int argc, char* argv[]) {
     bool equalsPrevDown = false;
     bool minusPrevDown = false;
 
-    int inputBuffTracker = 0;
-    char inputBuff[2000];
+    InputContext inputContext;
+    InputContextCreate(&inputContext, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"));
 
     bool shouldContinue = true;
     while (shouldContinue) {
         SDL_Event event;
+        InputContextBegin(&inputContext);
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_EVENT_QUIT) {
                 shouldContinue = false;
                 continue;
-            } else if (event.type == SDL_EVENT_TEXT_INPUT) {
-                if (inputBuffTracker + 2 >= 2000) {
-                    inputBuffTracker = 0;
-                    SDL_zero(inputBuff);
-                }
-
-                inputBuff[inputBuffTracker] = event.text.text[0];
-                inputBuff[inputBuffTracker + 1] = '\0';
-
-                GPUTextUpdate(&inputText, inputBuff);
-                inputBuffTracker++;
             }
+
+            InputContextUpdate(&inputContext, &event);
         }
+        InputContextEnd(&inputContext);
 
         RenderContext renderContext = {0};
         renderContext.texture = NULL;
         RenderContextBegin(&renderContext, &appContext, NULL);
 
-        DrawText(&renderContext, &inputText, (float[]){0, 0});
+        DrawInputContext(&renderContext, &inputContext, (float[]){0.0, 0.0});
 
         RenderContextEnd(&renderContext);
     }
 
-    SDL_StopTextInput(appContext.window);
+    InputContextDestroy(&inputContext);
 
-    GPUTextDestroy(&inputText);
+    SDL_StopTextInput(appContext.window);
 
     FontRegistryDestroy(&fontRegistry);
 

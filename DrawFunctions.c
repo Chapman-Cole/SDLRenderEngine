@@ -14,13 +14,19 @@ void DrawRectangle(RenderContext* renderContext, float center[2], float size[2],
     SDL_PushGPUFragmentUniformData(
         renderContext->cmdbuf,
         0,
-        (float[48]){
-            color[0], color[1], color[2], color[3], // color
-            center[0], center[1],                   // center
-            size[0], size[1],                       // size
-            0,                                      // roundness (should be 0 since this is a normal rectangle)
-            renderContext->aspectRatio,             // aspect ratio
-            0, 0                                    // padding
+        (float[12]){
+            color[0],
+            color[1],
+            color[2],
+            color[3], // color
+            center[0],
+            center[1], // center
+            size[0],
+            size[1],                    // size
+            0,                          // roundness (should be 0 since this is a normal rectangle)
+            renderContext->aspectRatio, // aspect ratio
+            0,
+            0, // padding
         },
         48);
 
@@ -35,13 +41,22 @@ void DrawRectangleRounded(RenderContext* renderContext, float center[2], float s
     SDL_PushGPUVertexUniformData(
         renderContext->cmdbuf,
         0,
-        (float[32]){center[0], center[1], size[0], size[1], renderContext->aspectRatio, 0, 0, 0},
+        (float[8]){
+            center[0],
+            center[1],
+            size[0],
+            size[1],
+            renderContext->aspectRatio,
+            0,
+            0,
+            0,
+        },
         32);
 
     SDL_PushGPUFragmentUniformData(
         renderContext->cmdbuf,
         0,
-        (float[48]){
+        (float[12]){
             color[0], color[1], color[2], color[3], // color
             center[0], center[1],                   // center
             size[0], size[1],                       // size
@@ -68,7 +83,7 @@ void DrawCircle(RenderContext* renderContext, float center[2], float radius, flo
     SDL_PushGPUFragmentUniformData(
         renderContext->cmdbuf,
         0,
-        (float[32]){
+        (float[8]){
             color[0], color[1], color[2], color[3], // color
             center[0], center[1],                   // center
             radius,                                 // radius
@@ -92,7 +107,7 @@ void DrawText(RenderContext* renderContext, GPUText* text, float position[2]) {
     SDL_PushGPUVertexUniformData(
         renderContext->cmdbuf,
         0,
-        (float[48]){
+        (float[12]){
             (float)text->width,
             (float)text->height, // text size
             (float)text->x,
@@ -101,8 +116,10 @@ void DrawText(RenderContext* renderContext, GPUText* text, float position[2]) {
             renderContext->renderHeight,             // Window Dimensions
             renderContext->aspectRatio,              // aspect ratio
             renderContext->appContext->displayScale, // display scale for high dpi screens
-            position[0], position[1],                // Text offset/position
-            0, 0                                     // padding
+            position[0],
+            position[1], // Text offset/position
+            0,
+            0, // padding
         },
         48);
 
@@ -135,4 +152,31 @@ void DrawText(RenderContext* renderContext, GPUText* text, float position[2]) {
 
         SDL_DrawGPUIndexedPrimitives(renderContext->renderPass, text->atlasses[i].numIndices, 1, 0, 0, 0);
     }
+}
+
+void DrawInputContext(RenderContext* renderContext, InputContext* inputContext, float position[2]) {
+    DrawText(renderContext, &inputContext->gpuText, position);
+
+    // Render the cursor here
+
+    SDL_BindGPUGraphicsPipeline(
+        renderContext->renderPass,
+        renderContext->appContext->builtinPipelines[BUILTIN_PIPELINE_TEXT_CURSOR]);
+
+    SDL_PushGPUVertexUniformData(
+        renderContext->cmdbuf,
+        0,
+        (float[8]){
+            (float)inputContext->cursorX,
+            (float)inputContext->cursorY, // Cursor Position
+            2.0f,
+            (float)inputContext->cursorHeight, // Cursor Size
+            renderContext->renderWidth,
+            renderContext->renderHeight, // Window Dimensions
+            0,
+            0, // Padding
+        },
+        32);
+    
+    SDL_DrawGPUPrimitives(renderContext->renderPass, 6, 1, 0, 0);
 }
