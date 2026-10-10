@@ -1,4 +1,20 @@
 #include "InputContext.h"
+#include "DynamicArray.h"
+#include <SDL3/SDL_log.h>
+#include <SDL3_ttf/SDL_ttf.h>
+#include <stdbool.h>
+
+typedef struct IntArray {
+    int* arr;
+    size_t len;
+    size_t capacity;
+} IntArray;
+
+typedef struct CharArray {
+    char* arr;
+    size_t len;
+    size_t capacity;
+} CharArray;
 
 static inline int get_utf8_width(Uint32 code) {
     if (code <= 127) {
@@ -90,7 +106,82 @@ static inline int InputContextBufferInsert(InputContext* inputContext, const cha
     return 0;
 }
 
-static inline void InputContextUpdateCursor(InputContext* inputContext) {
+// Generates the GPUText object while accounting for text wrapping
+static inline int InputContextGenTextWrap(InputContext* inputContext) {
+    IntArray indices;
+    DYNAMIC_ARRAY_INIT(indices);
+
+    CharArray tempBuffer;
+    DYNAMIC_ARRAY_INIT(tempBuffer);
+
+    int tracker = 0;
+    int prevStartIndex = 0;
+    char* bufferAdvancedPtr = inputContext->buffer;
+    while (tracker < inputContext->bufferLen) {
+        Uint32 code = SDL_StepUTF8((const char**)&bufferAdvancedPtr, NULL);
+        int code_width = get_utf8_width(code);
+
+        if (code == ' ') {
+            DYNAMIC_ARRAY_APPEND(indices, tracker);
+        } else if (code == '\n') {
+            // This solves the very specific case of when adding one more character
+            // would push that character onto the next line, and that character happens to
+            // be the newline character (pressing enter). Essentially, it needs to be handled the same
+            // way as the space, which is looking at the string not including the space or in this case newline
+            // (the loop will initially look at the string including the newline, and when tracker is updated
+            // according to the indices array, it will get the proper length not including the newline character)
+            DYNAMIC_ARRAY_APPEND(indices, tracker);
+        }
+
+        if (code == '\n' || tracker + code_width >= inputContext->bufferLen) {
+            bool loopRan = false;
+            int textSegmentLength = (tracker + code_width) - prevStartIndex;
+
+            int textWidth, textHeight;
+            // TTF_GetStringSize is very bizzare in that the height will only ever max out at the height of one line,
+            // while the width will continuously grow. This means it works fine for single lines, but it has other quirks
+            // like newline characters adding to width, which luckily had an easy solution (see the explanation above in else if (code == '\n'))
+            // I have absolutely no idea why it works this way when TTF_GetTextSize works as expected, but it is somewhat annoying
+            TTF_GetStringSize(inputContext->font, inputContext->buffer + prevStartIndex, textSegmentLength, &textWidth, &textHeight);
+            while (indices.len > 0 && (float)textWidth > inputContext->layout.width) {
+                loopRan = true;
+                tracker = indices.arr[indices.len - 1];
+                textSegmentLength = tracker - prevStartIndex;
+                TTF_GetStringSize(inputContext->font, inputContext->buffer + prevStartIndex, textSegmentLength, &textWidth, &textHeight);
+                DYNAMIC_ARRAY_POP(indices);
+            }
+
+            DYNAMIC_ARRAY_INSERT_ARRAY(tempBuffer, ((CharArray){.arr = inputContext->buffer + prevStartIndex, .len = textSegmentLength, .capacity = 0}), tempBuffer.len);
+
+            if (loopRan == true) {
+                // +1 to account for the tracker pointing to the space before the starting character
+                bufferAdvancedPtr = &inputContext->buffer[tracker + 1];
+
+                // no offset is needed for the cursorIndex even though a newline is being appended
+                // because a space is effectively being traded for a newline (this means
+                // the cursor index will also work in the newly created buffer)
+                DYNAMIC_ARRAY_INSERT(tempBuffer, tempBuffer.len, '\n');
+
+                // +1 to account for the fact that the tracker points to a space instead of the
+                // start of the line
+                prevStartIndex = tracker + 1;
+            } else {
+                // + code_width so that the current character (almost always a newline character) is skipped over since
+                // it's already included when copying the line into the temp buffer
+                prevStartIndex = tracker + code_width;
+            }
+
+            DYNAMIC_ARRAY_FREE(indices);
+        }
+
+        tracker += code_width;
+    }
+
+    GPUTextUpdate(&inputContext->gpuText, tempBuffer.arr, tempBuffer.len);
+
+    DYNAMIC_ARRAY_FREE(indices);
+    DYNAMIC_ARRAY_FREE(tempBuffer);
+    return 0;
 }
 
 int InputContextUpdate(InputContext* inputContext, SDL_Event* event) {
@@ -274,14 +365,25 @@ int InputContextEnd(InputContext* inputContext) {
         inputContext->bufferWasModified = true;
     }
 
+    // If the layout of the input context changes, the buffer must be re-generated
+    if (
+        inputContext->layout.x != inputContext->prevLayout.x ||
+        inputContext->layout.y != inputContext->prevLayout.y ||
+        inputContext->layout.width != inputContext->prevLayout.width ||
+        inputContext->layout.height != inputContext->prevLayout.height
+    ) {
+        inputContext->bufferWasModified = true;
+        inputContext->prevLayout = inputContext->layout;
+    }
+
     if (inputContext->bufferWasModified == true) {
-        GPUTextUpdate(&inputContext->gpuText, inputContext->buffer);
+        InputContextGenTextWrap(inputContext);
     }
 
     // Update cursor
     if (inputContext->bufferWasModified == true || inputContext->cursorWasModified) {
-        int currLineStartIndex = prev_line_start_index(inputContext->buffer, inputContext->cursorIndex);
-        const char* currLineStart = &inputContext->buffer[currLineStartIndex];
+        int currLineStartIndex = prev_line_start_index(inputContext->gpuText.text->text, inputContext->cursorIndex);
+        const char* currLineStart = &inputContext->gpuText.text->text[currLineStartIndex];
 
         // Can't pass in 0 to TTF_GetStringSize because the function uses that as an indication
         // that it should treat it as a null terminated string, meaning it will screw up the x
@@ -290,15 +392,14 @@ int InputContextEnd(InputContext* inputContext) {
             inputContext->cursorX = 0;
         } else {
             TTF_GetStringSize(
-                inputContext->gpuText.font,
+                inputContext->font,
                 currLineStart,
                 inputContext->cursorIndex - currLineStartIndex,
                 &inputContext->cursorX,
                 &inputContext->cursorY);
         }
 
-        // +1 and minus sign necessary because the y position has to be a negative offset since it is drawn from the bottom left corner up
-        inputContext->cursorY = -(get_num_newlines(inputContext->buffer, inputContext->cursorIndex) + 1) * inputContext->cursorHeight;
+        inputContext->cursorY = get_num_newlines(inputContext->gpuText.text->text, inputContext->cursorIndex) * inputContext->cursorHeight;
     }
 
     return 0;

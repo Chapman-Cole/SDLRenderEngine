@@ -98,11 +98,16 @@ static inline int generateGPUBuffers(GPUText* renderText, AppContext* appContext
     }
 }
 
-int GPUTextCreate(GPUText* renderText, AppContext* appContext, TTF_Font* font, const char* text) {
+int GPUTextCreate(GPUText* renderText, AppContext* appContext, TTF_Font* font, const char* text, uint32_t length, float color[4]) {
     renderText->appContext = appContext;
     renderText->font = font;
 
-    renderText->text = TTF_CreateText(appContext->textEngine, font, text, 0);
+    renderText->color[0] = color[0];
+    renderText->color[1] = color[1];
+    renderText->color[2] = color[2];
+    renderText->color[3] = color[3];
+
+    renderText->text = TTF_CreateText(appContext->textEngine, font, text, length);
     if (renderText->text == NULL) {
         SDL_Log("Failed to create text: %s", SDL_GetError());
         return -1;
@@ -135,14 +140,14 @@ int GPUTextDestroy(GPUText* renderText) {
     return 0;
 }
 
-int GPUTextUpdate(GPUText* renderText, const char* text) {
+int GPUTextUpdate(GPUText* renderText, const char* text, uint32_t length) {
     for (Uint32 i = 0; i < renderText->numAtlasses; i++) {
         SDL_ReleaseGPUBuffer(renderText->appContext->device, renderText->atlasses[i].vertexBuffer);
         SDL_ReleaseGPUBuffer(renderText->appContext->device, renderText->atlasses[i].indexBuffer);
     }
     SDL_free(renderText->atlasses);
 
-    TTF_SetTextString(renderText->text, text, 0);
+    TTF_SetTextString(renderText->text, text, length);
 
     TTF_GetTextSize(renderText->text, &renderText->width, &renderText->height);
     TTF_GetTextPosition(renderText->text, &renderText->x, &renderText->y);

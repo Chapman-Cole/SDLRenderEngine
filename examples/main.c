@@ -1,31 +1,14 @@
-#include "AppContext.h"
-#include "DrawFunctions.h"
-#include "FontRegistry.h"
-#include "GPUBuffers.h"
-#include "GPUText.h"
-#include "InputContext.h"
-#include "RenderContext.h"
-#include "Shaders.h"
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_main.h>
-#include <SDL3_ttf/SDL_textengine.h>
-#include <SDL3_ttf/SDL_ttf.h>
+#include "SDLRenderEngine.h"
 
-static float vertices[] = {
-    -1.0f, -1.0f, 0.0f,
-    1.0f, -1.0f, 0.0f,
-    -1.0f, 1.0f, 0.0f,
-    1.0f, 1.0f, 0.0f};
+static float vertices[] = {-1.0f, -1.0f, 0.0f, 1.0f, -1.0f, 0.0f, -1.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f};
 
-static Uint16 indices[] = {
-    0, 1, 2,
-    1, 3, 2};
+static Uint16 indices[] = {0, 1, 2, 1, 3, 2};
 
 int main(int argc, char* argv[]) {
     AppContext appContext = {0};
     appContext.windowName = "Renderer";
     appContext.deviceName = NULL;
-    AppContextInit(&appContext, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+    AppContextInit(&appContext, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY, false);
     SDL_SetGPUSwapchainParameters(appContext.device, appContext.window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_IMMEDIATE);
 
     FontRegistry fontRegistry;
@@ -40,7 +23,7 @@ int main(int argc, char* argv[]) {
     bool minusPrevDown = false;
 
     InputContext inputContext;
-    InputContextCreate(&inputContext, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"));
+    InputContextCreate(&inputContext, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"), (float[4]){1.0, 1.0, 1.0, 1.0f}, (float[4]){1.0, 1.0, 1.0, 1.0f}, (InputContextLayout){.x = 100.0f, .y = 100.0f, .width = 500.0f, .height = 1000.0f});
 
     bool shouldContinue = true;
     while (shouldContinue) {
@@ -60,7 +43,7 @@ int main(int argc, char* argv[]) {
         renderContext.texture = NULL;
         RenderContextBegin(&renderContext, &appContext, NULL);
 
-        DrawInputContext(&renderContext, &inputContext, (float[]){0.0, 0.0});
+        DrawInputContext(&renderContext, &inputContext);
 
         RenderContextEnd(&renderContext);
     }

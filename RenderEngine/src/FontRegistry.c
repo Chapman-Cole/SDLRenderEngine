@@ -19,7 +19,7 @@ Uint32 basic_hash_function(const char* identifier) {
 }
 
 int FontRegistrySet(FontRegistry* registry, const char* identifier, const char* path, float pts) {
-    Uint32 index = basic_hash_function(identifier) % FONT_REGISTRY_HASHMAP_LEN;
+    Uint32 index = basic_hash_function(identifier) & (FONT_REGISTRY_HASHMAP_LEN - 1);
 
     SDL_PropertiesID fontProps = SDL_CreateProperties();
     SDL_SetStringProperty(fontProps, TTF_PROP_FONT_CREATE_FILENAME_STRING, path);
@@ -95,7 +95,7 @@ int FontRegistrySet(FontRegistry* registry, const char* identifier, const char* 
 }
 
 TTF_Font* FontRegistryGet(FontRegistry* registry, const char* identifier) {
-    Uint32 index = basic_hash_function(identifier) % FONT_REGISTRY_HASHMAP_LEN;
+    Uint32 index = basic_hash_function(identifier) & (FONT_REGISTRY_HASHMAP_LEN - 1);
 
     if (registry->hashmap[index].len == 1) {
         return registry->hashmap[index].arr[0].font;
@@ -111,7 +111,7 @@ TTF_Font* FontRegistryGet(FontRegistry* registry, const char* identifier) {
 }
 
 int FontRegistryRemove(FontRegistry* registry, const char* identifier) {
-    Uint32 index = basic_hash_function(identifier) % FONT_REGISTRY_HASHMAP_LEN;
+    Uint32 index = basic_hash_function(identifier) & (FONT_REGISTRY_HASHMAP_LEN - 1);
 
     if (registry->hashmap[index].len == 1) {
         TTF_CloseFont(registry->hashmap[index].arr[0].font);
@@ -177,4 +177,32 @@ int FontRegistryDestroy(FontRegistry* registry) {
         }
     }
     return 0;
+}
+
+FontRegistryKey FontRegistryGenKey(FontRegistry* registry, const char* identifier) {
+    FontRegistryKey key;
+    Uint32 index = basic_hash_function(identifier) & (FONT_REGISTRY_HASHMAP_LEN - 1);
+    key = index; // lower 8 bits are the index into the hashmap array
+
+    if (registry->hashmap[index].len == 1) {
+        // No need to update key since the higher bits are already 0, and the offset into the bucket is 0
+        return key;
+    } else {
+        for (Uint32 i = 0; i < registry->hashmap[index].len; i++) {
+            if (SDL_strcmp(identifier, registry->hashmap[index].arr[i].identifier) == 0) {
+                key |= i << 8; // The upper 8 bits represent the offset into the bucket
+                return key;
+            }
+        }
+    }
+
+    // have to return a default
+    return 0;
+}
+
+TTF_Font* FontRegistryGetWithKey(FontRegistry* registry, FontRegistryKey key) {
+    uint8_t hashmapArrayIndex = key & 255; // Lower 8 bits
+    uint8_t bucketIndex = key >> 8;
+
+    return registry->hashmap[hashmapArrayIndex].arr[bucketIndex].font;
 }

@@ -18,7 +18,15 @@ layout(std140, set = 1, binding = 0) uniform InputStruct {
 } Input;
 
 void main() {
-    vec2 tempVec = Input.size * positions[gl_VertexIndex] + Input.position;
+    // Top left is treated as origin and down as positive, while the vertex coordinates use cartesian system,
+    // requiring the akward negative signs for the y values below since up is positive in cartesian system
+    vec2 tempVec = positions[gl_VertexIndex];
+
+    tempVec.x *= Input.size.x;
+    tempVec.y *= -Input.size.y;
+
+    tempVec.x += Input.position.x;
+    tempVec.y -= Input.position.y;
 
     float pixelScaleX = (1.0 - (-1.0)) / Input.windowDims.x;
     float pixelScaleY = (1.0 - (-1.0)) / Input.windowDims.y;

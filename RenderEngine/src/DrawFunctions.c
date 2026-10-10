@@ -1,6 +1,6 @@
 #include "DrawFunctions.h"
 
-void DrawRectangle(RenderContext* renderContext, float center[2], float size[2], float color[4]) {
+void DrawRectangle(RenderContext* renderContext, float position[2], float size[2], float color[4]) {
     SDL_BindGPUGraphicsPipeline(
         renderContext->renderPass,
         renderContext->appContext->builtinPipelines[BUILTIN_PIPELINE_RECTANGLE]);
@@ -8,7 +8,16 @@ void DrawRectangle(RenderContext* renderContext, float center[2], float size[2],
     SDL_PushGPUVertexUniformData(
         renderContext->cmdbuf,
         0,
-        (float[32]){center[0], center[1], size[0], size[1], renderContext->aspectRatio, 0, 0, 0},
+        (float[8]){
+            position[0],
+            position[1],
+            size[0],
+            size[1],
+            renderContext->renderWidth,
+            renderContext->renderHeight,
+            0,
+            0,
+        },
         32);
 
     SDL_PushGPUFragmentUniformData(
@@ -19,12 +28,12 @@ void DrawRectangle(RenderContext* renderContext, float center[2], float size[2],
             color[1],
             color[2],
             color[3], // color
-            center[0],
-            center[1], // center
+            position[0],
+            position[1], // center
             size[0],
-            size[1],                    // size
-            0,                          // roundness (should be 0 since this is a normal rectangle)
-            renderContext->aspectRatio, // aspect ratio
+            size[1], // size
+            0,       // roundness (should be 0 since this is a normal rectangle)
+            0,
             0,
             0, // padding
         },
@@ -33,7 +42,7 @@ void DrawRectangle(RenderContext* renderContext, float center[2], float size[2],
     SDL_DrawGPUPrimitives(renderContext->renderPass, 6, 1, 0, 0);
 }
 
-void DrawRectangleRounded(RenderContext* renderContext, float center[2], float size[2], float color[4], float roundness) {
+void DrawRectangleRounded(RenderContext* renderContext, float position[2], float size[2], float color[4], float cornerRadii[4]) {
     SDL_BindGPUGraphicsPipeline(
         renderContext->renderPass,
         renderContext->appContext->builtinPipelines[BUILTIN_PIPELINE_RECTANGLE]);
@@ -42,12 +51,12 @@ void DrawRectangleRounded(RenderContext* renderContext, float center[2], float s
         renderContext->cmdbuf,
         0,
         (float[8]){
-            center[0],
-            center[1],
+            position[0],
+            position[1],
             size[0],
             size[1],
-            renderContext->aspectRatio,
-            0,
+            renderContext->renderWidth,
+            renderContext->renderHeight,
             0,
             0,
         },
@@ -57,12 +66,18 @@ void DrawRectangleRounded(RenderContext* renderContext, float center[2], float s
         renderContext->cmdbuf,
         0,
         (float[12]){
-            color[0], color[1], color[2], color[3], // color
-            center[0], center[1],                   // center
-            size[0], size[1],                       // size
-            roundness,                              // roundness (should be 0 since this is a normal rectangle)
-            renderContext->aspectRatio,             // aspect ratio
-            0, 0                                    // padding
+            color[0],
+            color[1],
+            color[2],
+            color[3], // color
+            position[0],
+            position[1], // center
+            size[0],
+            size[1], // size
+            cornerRadii[0],
+            cornerRadii[1],
+            cornerRadii[2],
+            cornerRadii[3], // cornerRadii
         },
         48);
 
@@ -123,6 +138,17 @@ void DrawText(RenderContext* renderContext, GPUText* text, float position[2]) {
         },
         48);
 
+    SDL_PushGPUFragmentUniformData(
+        renderContext->cmdbuf,
+        0,
+        (float[4]){
+            text->color[0],
+            text->color[1],
+            text->color[2],
+            text->color[3],
+        },
+        16);
+
     for (Uint32 i = 0; i < text->numAtlasses; i++) {
 
         SDL_BindGPUVertexBuffers(
@@ -154,8 +180,8 @@ void DrawText(RenderContext* renderContext, GPUText* text, float position[2]) {
     }
 }
 
-void DrawInputContext(RenderContext* renderContext, InputContext* inputContext, float position[2]) {
-    DrawText(renderContext, &inputContext->gpuText, position);
+void DrawInputContext(RenderContext* renderContext, InputContext* inputContext) {
+    DrawText(renderContext, &inputContext->gpuText, (float[2]){inputContext->layout.x, inputContext->layout.y});
 
     // Render the cursor here
 
@@ -167,8 +193,8 @@ void DrawInputContext(RenderContext* renderContext, InputContext* inputContext, 
         renderContext->cmdbuf,
         0,
         (float[8]){
-            (float)inputContext->cursorX,
-            (float)inputContext->cursorY, // Cursor Position
+            (float)inputContext->cursorX + inputContext->layout.x,
+            (float)inputContext->cursorY + inputContext->layout.y, // Cursor Position
             2.0f,
             (float)inputContext->cursorHeight, // Cursor Size
             renderContext->renderWidth,
@@ -177,6 +203,17 @@ void DrawInputContext(RenderContext* renderContext, InputContext* inputContext, 
             0, // Padding
         },
         32);
-    
+
+    SDL_PushGPUFragmentUniformData(
+        renderContext->cmdbuf,
+        0,
+        (float[4]){
+            inputContext->cursorColor[0],
+            inputContext->cursorColor[1],
+            inputContext->cursorColor[2],
+            inputContext->cursorColor[3],
+        },
+        16);
+
     SDL_DrawGPUPrimitives(renderContext->renderPass, 6, 1, 0, 0);
 }

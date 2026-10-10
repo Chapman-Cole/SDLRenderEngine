@@ -2,14 +2,25 @@
 #define INPUTCONTEXT_H
 
 #include "GPUText.h"
-#include "SDL3/SDL.h"
 
 #define INPUT_CONTEXT_BASE_BUFFER_SIZE 2000
 
 #define INPUT_CONTEXT_KEY_SEQUENCE_MAX 3
 
+#define INPUT_CONTEXT_TEXT_ARRAY_GROW_AMOUNT 10
+
+typedef struct InputContextLayout {
+    float x;
+    float y;
+    float width;
+    float height;
+} InputContextLayout;
+
 typedef struct InputContext {
+    InputContextLayout layout;
+    InputContextLayout prevLayout;
     char* buffer;
+    TTF_Font* font;
     GPUText gpuText;
     SDL_Keycode keySequences[INPUT_CONTEXT_KEY_SEQUENCE_MAX];
     int keySequencesLen;
@@ -21,11 +32,15 @@ typedef struct InputContext {
     int cursorHeight; // Used for rendering the cursor
     bool bufferWasModified;
     bool cursorWasModified;
+    float textColor[4];
+    float cursorColor[4];
 } InputContext;
 
 // For use with SDL_PollEvent. Also make sure to call SDL_StartTextInput before processing
 // the SDL_EVENT_TEXT_ signals.
-static inline int InputContextCreate(InputContext* inputContext, AppContext* appContext, TTF_Font* font) {
+// The text color can be changed at any point after this by simply setting the textColor field of the struct
+// to the desired value. The same goes for the cursorColor.
+static inline int InputContextCreate(InputContext* inputContext, AppContext* appContext, TTF_Font* font, float textColor[4], float cursorColor[4], InputContextLayout layout) {
     inputContext->bufferCapacity = INPUT_CONTEXT_BASE_BUFFER_SIZE;
     inputContext->bufferLen = 0;
 
@@ -41,13 +56,27 @@ static inline int InputContextCreate(InputContext* inputContext, AppContext* app
 
     inputContext->cursorHeight = TTF_GetFontHeight(font);
     inputContext->cursorX = 0;
-    // Initialize to cursor negative height since text is drawn from bottom left up
-    inputContext->cursorY = -inputContext->cursorHeight;
+    inputContext->cursorY = 0;
+
+    inputContext->textColor[0] = textColor[0];
+    inputContext->textColor[1] = textColor[1];
+    inputContext->textColor[2] = textColor[2];
+    inputContext->textColor[3] = textColor[3];
+
+    inputContext->cursorColor[0] = cursorColor[0];
+    inputContext->cursorColor[1] = cursorColor[1];
+    inputContext->cursorColor[2] = cursorColor[2];
+    inputContext->cursorColor[3] = cursorColor[3];
+
+    inputContext->layout = layout;
+    inputContext->prevLayout = inputContext->layout;
 
     inputContext->keySequencesLen = 0;
     SDL_zeroa(inputContext->keySequences);
 
-    GPUTextCreate(&inputContext->gpuText, appContext, font, inputContext->buffer);
+    inputContext->font = font;
+
+    GPUTextCreate(&inputContext->gpuText, appContext, font, "", 0, textColor);
     return 0;
 }
 

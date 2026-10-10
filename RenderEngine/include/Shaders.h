@@ -1,7 +1,6 @@
 #ifndef SHADERS_H
 #define SHADERS_H
 
-#include "SDL3/SDL.h"
 #include "AppContext.h"
 
 SDL_GPUShader* ShaderLoad(AppContext* appContext, const char* path, Uint32 samplerCount, Uint32 uniformBufferCount, Uint32 storageBufferCount, Uint32 storageTextureCount);

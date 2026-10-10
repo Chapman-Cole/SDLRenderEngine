@@ -6,11 +6,9 @@ layout(location = 0) out vec4 outColor;
 
 layout(std140, set = 3, binding = 0) uniform InputData {
     vec4 color;
-    vec2 center;
+    vec2 position;
     vec2 size;
-    float roundness;
-    float aspectRatio;
-    vec2 pad;
+    vec4 cornerRadii;
 } Input;
 
 // glslc rectangle.frag -o rectangle.frag.spv
@@ -19,27 +17,61 @@ layout(std140, set = 3, binding = 0) uniform InputData {
 // glslc rectangle.frag -o rectangle.frag.spv ; xxd -i rectangle.frag.spv > RectangleFragmentShader.h
 
 void main() {
-    vec2 adjustedPos = pos.xy - Input.center;
-    adjustedPos.x *= 1.0 / Input.aspectRatio; // Undo the aspect ratio transformation to simplify the math
-
-    // times 0.5 so that it can't extend beyond the halfway point for the curvature
-    float radius = Input.roundness * min(Input.size.x, Input.size.y) * 0.5;
-
+    // Center around zero, since the top left corner is at (0, 0) relative to the input pos
+    vec2 adjustedPos = pos.xy;
+    adjustedPos.x -= Input.size.x / 2.0f;
+    adjustedPos.y += Input.size.y / 2.0f;
     vec2 adjustedBounds = 0.5 * Input.size;
 
-    float adjustedX = adjustedPos.x - adjustedBounds.x + radius;
-    float root1 = sqrt(radius * radius - adjustedX * adjustedX);
+    // Input.cornerRadii.x - Top Left
+    // Input.cornerRadii.y - Top Right
+    // Input.cornerRadii.z - Bottom Left
+    // Input.cornerRadii.w - Bottom Right
 
-    float adjustedX2 = -adjustedPos.x - adjustedBounds.x + radius;
-    float root2 = sqrt(radius * radius - adjustedX2 * adjustedX2);
+    // Top Left Corner
+    if (Input.cornerRadii.x > 0.0) {
+        float radius = Input.cornerRadii.x;
 
-    if (Input.roundness > 0.0) {
-        if (
-            (adjustedPos.x > adjustedBounds.x - radius && adjustedPos.y > adjustedBounds.y - radius + root1) ||
-            (adjustedPos.x > adjustedBounds.x - radius && adjustedPos.y < -adjustedBounds.y + radius - root1) || 
-            (adjustedPos.x < radius - adjustedBounds.x && adjustedPos.y > adjustedBounds.y - radius + root2) ||
-            (adjustedPos.x < radius - adjustedBounds.x && adjustedPos.y < -adjustedBounds.y + radius - root2)
-            ) {
+        float adjustedX = -adjustedPos.x - adjustedBounds.x + radius;
+        float root = sqrt(radius * radius - adjustedX * adjustedX);
+
+        if (adjustedPos.x < radius - adjustedBounds.x && adjustedPos.y > adjustedBounds.y - radius + root) {
+            discard;
+        }
+    }
+
+    // Top Right Corner
+    if (Input.cornerRadii.y > 0.0) {
+        float radius = Input.cornerRadii.y;
+
+        float adjustedX = adjustedPos.x - adjustedBounds.x + radius;
+        float root = sqrt(radius * radius - adjustedX * adjustedX);
+
+        if (adjustedPos.x > adjustedBounds.x - radius && adjustedPos.y > adjustedBounds.y - radius + root) {
+            discard;
+        }
+    }
+
+    // Bottom Left Corner
+    if (Input.cornerRadii.z > 0.0) {
+        float radius = Input.cornerRadii.z;
+
+        float adjustedX = -adjustedPos.x - adjustedBounds.x + radius;
+        float root = sqrt(radius * radius - adjustedX * adjustedX);
+
+        if (adjustedPos.x < radius - adjustedBounds.x && adjustedPos.y < -adjustedBounds.y + radius - root) {
+            discard;
+        }
+    }
+
+    // Bottom Right Corner
+    if (Input.cornerRadii.w > 0.0) {
+        float radius = Input.cornerRadii.w;
+
+        float adjustedX = adjustedPos.x - adjustedBounds.x + radius;
+        float root = sqrt(radius * radius - adjustedX * adjustedX);
+
+        if (adjustedPos.x > adjustedBounds.x - radius && adjustedPos.y < -adjustedBounds.y + radius - root) {
             discard;
         }
     }

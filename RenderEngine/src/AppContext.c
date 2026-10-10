@@ -7,6 +7,7 @@
 #include "shaders/builtin/headers/text.vert.h"
 #include "shaders/builtin/headers/textcursor.frag.h"
 #include "shaders/builtin/headers/textcursor.vert.h"
+#include <assert.h>
 
 static SDL_GPUColorTargetBlendState DefaultBlendState = {
     .enable_blend = true,
@@ -194,7 +195,7 @@ static inline int AppContextLoadTextPipeline(AppContext* app_context) {
             .num_samplers = 1,
             .num_storage_buffers = 0,
             .num_storage_textures = 0,
-            .num_uniform_buffers = 0, // Update this as needed
+            .num_uniform_buffers = 1, // Update this as needed
             .props = 0,
             .entrypoint = "main",
         });
@@ -287,7 +288,7 @@ static inline int AppContextLoadTextCursorPipeline(AppContext* app_context) {
             .num_samplers = 0,
             .num_storage_buffers = 0,
             .num_storage_textures = 0,
-            .num_uniform_buffers = 0, // Update this as needed
+            .num_uniform_buffers = 1, // Update this as needed
             .props = 0,
             .entrypoint = "main",
         });
@@ -350,13 +351,14 @@ static inline int AppContextLoadTextCursorPipeline(AppContext* app_context) {
     return true;
 }
 
-int AppContextInit(AppContext* app_context, SDL_WindowFlags windowFlags) {
+int AppContextInit(AppContext* app_context, SDL_WindowFlags windowFlags, bool gpuDebugEnabled) {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         SDL_Log("Failed to initialize video subsystem: %s", SDL_GetError());
         return -1;
     }
 
-    app_context->device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, true, app_context->deviceName);
+    app_context->device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, gpuDebugEnabled, app_context->deviceName);
+    
     if (app_context->device == NULL) {
         SDL_Log("Failed to create GPU device: %s", SDL_GetError());
         return -1;

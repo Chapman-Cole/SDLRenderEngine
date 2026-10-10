@@ -1,7 +1,6 @@
 #ifndef GPUBUFFERS_H
 #define GPUBUFFERS_H
 
-#include "SDL3/SDL.h"
 #include "AppContext.h"
 
 #define GPUBUFFERS_MAX_UPLOAD 20
