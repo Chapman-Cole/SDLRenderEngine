@@ -1,6 +1,7 @@
 #ifndef APPCONTEXT_H
 #define APPCONTEXT_H
 
+#include "SDL3/SDL.h"
 #include "SDL3_ttf/SDL_ttf.h"
 
 #define APP_CONTEXT_BUILTIN_PIPELINES_MAX 12

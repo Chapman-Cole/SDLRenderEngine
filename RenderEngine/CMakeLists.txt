@@ -10,8 +10,12 @@ add_library(RenderEngine STATIC
 )
 
 if (ENABLE_ASAN)
-    target_compile_options(RenderEngine PRIVATE -fsanitize=address -fno-omit-frame-pointer -g)
-    target_link_options(RenderEngine PRIVATE -fsanitize=address)
+    if(WIN32)
+        target_compile_options(RenderEngine PRIVATE /fsanitize=address)
+    elseif(UNIX)
+        target_compile_options(RenderEngine PRIVATE -fsanitize=address -fno-omit-frame-pointer -g)
+        target_link_options(RenderEngine PRIVATE -fsanitize=address)
+    endif()
 endif()
 
 find_package(SDL3 REQUIRED)
@@ -29,7 +33,7 @@ endif()
 
 target_include_directories(RenderEngine PUBLIC ${sdl_ttf_header_path} "include/" ${CMAKE_SOURCE_DIR})
 
-target_link_libraries(RenderEngine PUBLIC SDL3 ${sdl_ttf_library_path})
+target_link_libraries(RenderEngine PUBLIC SDL3::SDL3 ${sdl_ttf_library_path})
 
 add_dependencies(RenderEngine BuiltinShaders CompiledShaders)
 

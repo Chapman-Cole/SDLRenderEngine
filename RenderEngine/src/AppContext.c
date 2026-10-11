@@ -7,7 +7,6 @@
 #include "shaders/builtin/headers/text.vert.h"
 #include "shaders/builtin/headers/textcursor.frag.h"
 #include "shaders/builtin/headers/textcursor.vert.h"
-#include <assert.h>
 
 static SDL_GPUColorTargetBlendState DefaultBlendState = {
     .enable_blend = true,

@@ -3,16 +3,23 @@
 
 #include "AppContext.h"
 
-#define GPUBUFFERS_MAX_UPLOAD 20
+typedef struct TransferContextInfo {
+    SDL_GPUTransferBuffer* transferBuffer;
+    SDL_GPUBuffer* gpuBuffer;
+    Uint32 bufferSize;
+} TransferContextInfo;
+
+typedef struct TransferContextInfoArray {
+    TransferContextInfo* arr;
+    size_t len;
+    size_t capacity;
+} TransferContextInfoArray;
 
 typedef struct GPUTransferContext {
+    TransferContextInfoArray contextInfo;
     SDL_GPUCommandBuffer* cmdbuf;
     SDL_GPUCopyPass* copyPass;
-    SDL_GPUTransferBuffer* transferBuffers[GPUBUFFERS_MAX_UPLOAD];
-    SDL_GPUBuffer* gpuBuffers[GPUBUFFERS_MAX_UPLOAD];
-    Uint32 bufferSizes[GPUBUFFERS_MAX_UPLOAD];
     AppContext* appContext;
-    Uint32 bufferLen;
 } GPUTransferContext;
 
 int GPUTransferContextBegin(GPUTransferContext* transferContext, AppContext* appContext);

@@ -41,6 +41,8 @@ static inline int generateGPUBuffers(GPUText* renderText, AppContext* appContext
     renderText->atlasses = SDL_calloc(numAtlasses, sizeof(TextSequence));
 
     numAtlasses = 0;
+    GPUTransferContext transferContext = {0};
+    GPUTransferContextBegin(&transferContext, appContext);
     for (; sequence != NULL; sequence = sequence->next) {
         TextVertex* vertices = SDL_calloc(sequence->num_vertices, sizeof(TextVertex));
         int* indices = SDL_calloc(sequence->num_indices, sizeof(int));
@@ -83,11 +85,8 @@ static inline int generateGPUBuffers(GPUText* renderText, AppContext* appContext
             return -1;
         }
 
-        GPUTransferContext transferContext = {0};
-        GPUTransferContextBegin(&transferContext, appContext);
         GPUTransferContextUpload(&transferContext, textSequence.vertexBuffer, vertices, sequence->num_vertices * sizeof(TextVertex));
         GPUTransferContextUpload(&transferContext, textSequence.indexBuffer, indices, sequence->num_indices * sizeof(int));
-        GPUTransferContextEnd(&transferContext);
 
         SDL_free(vertices);
         SDL_free(indices);
@@ -96,6 +95,9 @@ static inline int generateGPUBuffers(GPUText* renderText, AppContext* appContext
 
         numAtlasses++;
     }
+    GPUTransferContextEnd(&transferContext);
+
+    return 0;
 }
 
 int GPUTextCreate(GPUText* renderText, AppContext* appContext, TTF_Font* font, const char* text, uint32_t length, float color[4]) {

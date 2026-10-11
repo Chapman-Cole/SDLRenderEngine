@@ -8,20 +8,15 @@ int main(int argc, char* argv[]) {
     AppContext appContext = {0};
     appContext.windowName = "Renderer";
     appContext.deviceName = NULL;
-    AppContextInit(&appContext, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY, false);
+    AppContextInit(&appContext, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY, true);
     SDL_SetGPUSwapchainParameters(appContext.device, appContext.window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_IMMEDIATE);
 
     FontRegistry fontRegistry;
     FontRegistryCreate(&fontRegistry, &appContext);
-    FontRegistrySet(&fontRegistry, "Hack-Regular15", "/usr/share/fonts/source-foundry-hack-fonts/Hack-Regular.ttf", 15.0f);
+    FontRegistrySet(&fontRegistry, "Hack-Regular15", "C:\\WINDOWS\\FONTS\\SEGUIVAR.TTF", 15.0f);
 
     SDL_StartTextInput(appContext.window);
-
-    float scaleFactor = 0.0f;
-
-    bool equalsPrevDown = false;
-    bool minusPrevDown = false;
-
+    
     InputContext inputContext;
     InputContextCreate(&inputContext, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"), (float[4]){1.0, 1.0, 1.0, 1.0f}, (float[4]){1.0, 1.0, 1.0, 1.0f}, (InputContextLayout){.x = 100.0f, .y = 100.0f, .width = 500.0f, .height = 1000.0f});
 
@@ -41,7 +36,10 @@ int main(int argc, char* argv[]) {
 
         RenderContext renderContext = {0};
         renderContext.texture = NULL;
-        RenderContextBegin(&renderContext, &appContext, NULL);
+
+        if (RenderContextBegin(&renderContext, &appContext, NULL) < 0) {
+            exit(-1);
+        }
 
         DrawInputContext(&renderContext, &inputContext);
 

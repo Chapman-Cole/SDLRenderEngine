@@ -177,7 +177,12 @@ static inline int InputContextGenTextWrap(InputContext* inputContext) {
         tracker += code_width;
     }
 
-    GPUTextUpdate(&inputContext->gpuText, tempBuffer.arr, tempBuffer.len);
+    // If inputContext buffer is empty, then the loop will never, so must handle this special case
+    if (tempBuffer.arr == NULL) {
+        GPUTextUpdate(&inputContext->gpuText, "", 0);
+    } else {
+        GPUTextUpdate(&inputContext->gpuText, tempBuffer.arr, tempBuffer.len);
+    }
 
     DYNAMIC_ARRAY_FREE(indices);
     DYNAMIC_ARRAY_FREE(tempBuffer);
@@ -370,8 +375,7 @@ int InputContextEnd(InputContext* inputContext) {
         inputContext->layout.x != inputContext->prevLayout.x ||
         inputContext->layout.y != inputContext->prevLayout.y ||
         inputContext->layout.width != inputContext->prevLayout.width ||
-        inputContext->layout.height != inputContext->prevLayout.height
-    ) {
+        inputContext->layout.height != inputContext->prevLayout.height) {
         inputContext->bufferWasModified = true;
         inputContext->prevLayout = inputContext->layout;
     }
@@ -382,24 +386,31 @@ int InputContextEnd(InputContext* inputContext) {
 
     // Update cursor
     if (inputContext->bufferWasModified == true || inputContext->cursorWasModified) {
-        int currLineStartIndex = prev_line_start_index(inputContext->gpuText.text->text, inputContext->cursorIndex);
-        const char* currLineStart = &inputContext->gpuText.text->text[currLineStartIndex];
-
-        // Can't pass in 0 to TTF_GetStringSize because the function uses that as an indication
-        // that it should treat it as a null terminated string, meaning it will screw up the x
-        // length because it will fill it with the x length of the whole string
-        if (inputContext->cursorIndex - currLineStartIndex <= 0) {
+        // The text could be a NULL pointer if it is set with an empty string, and get_num_newlines
+        // and prev_line_start_index can't handle NULL pointers
+        if (inputContext->gpuText.text->text == NULL) {
+            inputContext->cursorY = 0;
             inputContext->cursorX = 0;
         } else {
-            TTF_GetStringSize(
-                inputContext->font,
-                currLineStart,
-                inputContext->cursorIndex - currLineStartIndex,
-                &inputContext->cursorX,
-                &inputContext->cursorY);
-        }
+            int currLineStartIndex = prev_line_start_index(inputContext->gpuText.text->text, inputContext->cursorIndex);
+            const char* currLineStart = &inputContext->gpuText.text->text[currLineStartIndex];
 
-        inputContext->cursorY = get_num_newlines(inputContext->gpuText.text->text, inputContext->cursorIndex) * inputContext->cursorHeight;
+            // Can't pass in 0 to TTF_GetStringSize because the function uses that as an indication
+            // that it should treat it as a null terminated string, meaning it will screw up the x
+            // length because it will fill it with the x length of the whole string
+            if (inputContext->cursorIndex - currLineStartIndex <= 0) {
+                inputContext->cursorX = 0;
+            } else {
+                TTF_GetStringSize(
+                    inputContext->font,
+                    currLineStart,
+                    inputContext->cursorIndex - currLineStartIndex,
+                    &inputContext->cursorX,
+                    &inputContext->cursorY);
+            }
+
+            inputContext->cursorY = get_num_newlines(inputContext->gpuText.text->text, inputContext->cursorIndex) * inputContext->cursorHeight;
+        }
     }
 
     return 0;

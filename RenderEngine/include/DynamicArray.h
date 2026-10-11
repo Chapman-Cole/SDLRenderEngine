@@ -58,46 +58,46 @@ static inline int _dynamic_array_shrink(void* arrayStruct, DynamicArrayInfo* arr
 }
 
 #define DYNAMIC_ARRAY_INIT(arrayStruct) \
-    arrayStruct.arr = NULL;             \
-    arrayStruct.len = 0;                \
-    arrayStruct.capacity = 1;
+    (arrayStruct).arr = NULL;           \
+    (arrayStruct).len = 0;              \
+    (arrayStruct).capacity = 1;
 
 #define DYNAMIC_ARRAY_INFO(arrayStruct) \
-    (DynamicArrayInfo) { .arr = offsetof(typeof(arrayStruct), arr), .len = offsetof(typeof(arrayStruct), len), .capacity = offsetof(typeof(arrayStruct), capacity), .element_size = sizeof(*(arrayStruct.arr)) }
+    ((DynamicArrayInfo){.arr = offsetof(typeof((arrayStruct)), arr), .len = offsetof(typeof((arrayStruct)), len), .capacity = offsetof(typeof((arrayStruct)), capacity), .element_size = sizeof(*((arrayStruct).arr))})
 
 #define DYNAMIC_ARRAY_FREE(arrayStruct) \
-    SDL_free(arrayStruct.arr);              \
-    arrayStruct.arr = NULL;             \
-    arrayStruct.len = 0;                \
-    arrayStruct.capacity = 1;
+    SDL_free((arrayStruct).arr);        \
+    (arrayStruct).arr = NULL;           \
+    (arrayStruct).len = 0;              \
+    (arrayStruct).capacity = 1;
 
 // When appending a struct element, you will have to wrap inline declarations in parentheses
-#define DYNAMIC_ARRAY_APPEND(arrayStruct, element)                          \
-    _dynamic_array_grow(&arrayStruct, &DYNAMIC_ARRAY_INFO(arrayStruct), 1); \
-    arrayStruct.arr[arrayStruct.len] = element;                             \
+#define DYNAMIC_ARRAY_APPEND(arrayStruct, element)                              \
+    _dynamic_array_grow(&(arrayStruct), &DYNAMIC_ARRAY_INFO((arrayStruct)), 1); \
+    arrayStruct.arr[arrayStruct.len] = (element);                               \
     arrayStruct.len++;
 
-#define DYNAMIC_ARRAY_POP(arrayStruct)                                        \
-    _dynamic_array_shrink(&arrayStruct, &DYNAMIC_ARRAY_INFO(arrayStruct), 1); \
-    arrayStruct.len -= arrayStruct.len == 0 ? 0 : 1;
+#define DYNAMIC_ARRAY_POP(arrayStruct)                                            \
+    _dynamic_array_shrink(&(arrayStruct), &DYNAMIC_ARRAY_INFO((arrayStruct)), 1); \
+    (arrayStruct).len -= (arrayStruct).len == 0 ? 0 : 1;
 
 // When inserting a struct element, you will have to wrap inline declarations in parentheses
-#define DYNAMIC_ARRAY_INSERT(arrayStruct, index, element)                                                                      \
-    _dynamic_array_grow(&arrayStruct, &DYNAMIC_ARRAY_INFO(arrayStruct), 1);                                                    \
-    SDL_memmove(&arrayStruct.arr[index + 1], &arrayStruct.arr[index], (arrayStruct.len - index) * sizeof(*(arrayStruct.arr))); \
-    arrayStruct.arr[index] = element;                                                                                          \
-    arrayStruct.len++;
+#define DYNAMIC_ARRAY_INSERT(arrayStruct, index, element)                                                                                  \
+    _dynamic_array_grow(&(arrayStruct), &DYNAMIC_ARRAY_INFO((arrayStruct)), 1);                                                            \
+    SDL_memmove(&((arrayStruct).arr[index + 1]), &((arrayStruct).arr[index]), ((arrayStruct).len - index) * sizeof(*((arrayStruct).arr))); \
+    (arrayStruct).arr[index] = (element);                                                                                                  \
+    (arrayStruct).len++;
 
-#define DYNAMIC_ARRAY_REMOVE(arrayStruct, index)                                                                                   \
-    _dynamic_array_shrink(&arrayStruct, &DYNAMIC_ARRAY_INFO(arrayStruct), 1);                                                      \
-    SDL_memmove(&arrayStruct.arr[index], &arrayStruct.arr[index + 1], (arrayStruct.len - index - 1) * sizeof(*(arrayStruct.arr))); \
-    arrayStruct.len -= arrayStruct.len == 0 ? 0 : 1;
+#define DYNAMIC_ARRAY_REMOVE(arrayStruct, index)                                                                                               \
+    _dynamic_array_shrink(&(arrayStruct), &DYNAMIC_ARRAY_INFO((arrayStruct)), 1);                                                              \
+    SDL_memmove(&((arrayStruct).arr[index]), &((arrayStruct).arr[index + 1]), ((arrayStruct).len - index - 1) * sizeof(*((arrayStruct).arr))); \
+    (arrayStruct).len -= (arrayStruct).len == 0 ? 0 : 1;
 
 // When declaring an inline struct for the src struct, you will have to wrap it in parentheses
 // the dst struct should not be declared inline since it is being directly modified
-#define DYNAMIC_ARRAY_INSERT_ARRAY(dst, src, index)                       \
-    _dynamic_array_grow(&dst, &DYNAMIC_ARRAY_INFO(dst), src.len);         \
-    SDL_memcpy(&dst.arr[index], src.arr, src.len * sizeof(*(src.arr))); \
-    dst.len += src.len;
+#define DYNAMIC_ARRAY_INSERT_ARRAY(dst, src, index)                               \
+    _dynamic_array_grow(&(dst), &DYNAMIC_ARRAY_INFO((dst)), (src).len);           \
+    SDL_memcpy(&((dst).arr[index]), (src).arr, (src).len * sizeof(*((src).arr))); \
+    (dst).len += (src).len;
 
 #endif

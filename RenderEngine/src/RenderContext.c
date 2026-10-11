@@ -13,8 +13,8 @@ int RenderContextBegin(RenderContext* renderContext, AppContext* appContext, SDL
     Uint32 renderWidth, renderHeight;
     if (target == NULL) {
         if (!SDL_WaitAndAcquireGPUSwapchainTexture(renderContext->cmdbuf, appContext->window, &renderContext->texture, &renderWidth, &renderHeight)) {
-            SDL_Log("Failed to acquire swapchain.\n");
-            SDL_SubmitGPUCommandBuffer(renderContext->cmdbuf);
+            SDL_Log("Failed to acquire swapchain: %s", SDL_GetError());
+            SDL_CancelGPUCommandBuffer(renderContext->cmdbuf);
             return -1;
         }
 
