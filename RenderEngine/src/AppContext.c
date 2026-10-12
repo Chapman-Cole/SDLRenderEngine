@@ -1,12 +1,24 @@
 #include "AppContext.h"
-#include "shaders/builtin/headers/circle.frag.h"
-#include "shaders/builtin/headers/circle.vert.h"
-#include "shaders/builtin/headers/rectangle.frag.h"
-#include "shaders/builtin/headers/rectangle.vert.h"
-#include "shaders/builtin/headers/text.frag.h"
-#include "shaders/builtin/headers/text.vert.h"
-#include "shaders/builtin/headers/textcursor.frag.h"
-#include "shaders/builtin/headers/textcursor.vert.h"
+#include "shaders/builtin/headers/circle_fragment_spirv.h"
+#include "shaders/builtin/headers/circle_vertex_spirv.h"
+#include "shaders/builtin/headers/rectangle_fragment_spirv.h"
+#include "shaders/builtin/headers/rectangle_vertex_spirv.h"
+#include "shaders/builtin/headers/text_fragment_spirv.h"
+#include "shaders/builtin/headers/text_vertex_spirv.h"
+#include "shaders/builtin/headers/textcursor_fragment_spirv.h"
+#include "shaders/builtin/headers/textcursor_vertex_spirv.h"
+#include "vulkan/vulkan.h"
+
+#ifdef _WIN32
+#include "shaders/builtin/headers/circle_fragment_dxil.h"
+#include "shaders/builtin/headers/circle_vertex_dxil.h"
+#include "shaders/builtin/headers/rectangle_fragment_dxil.h"
+#include "shaders/builtin/headers/rectangle_vertex_dxil.h"
+#include "shaders/builtin/headers/text_fragment_dxil.h"
+#include "shaders/builtin/headers/text_vertex_dxil.h"
+#include "shaders/builtin/headers/textcursor_fragment_dxil.h"
+#include "shaders/builtin/headers/textcursor_vertex_dxil.h"
+#endif
 
 static SDL_GPUColorTargetBlendState DefaultBlendState = {
     .enable_blend = true,
@@ -20,12 +32,37 @@ static SDL_GPUColorTargetBlendState DefaultBlendState = {
 };
 
 static inline int AppContextLoadRectanglePipeline(AppContext* app_context) {
+    size_t vertex_shader_source_len, fragment_shader_source_len;
+    Uint8* vertex_shader_source;
+    Uint8* fragment_shader_source;
+
+    switch (app_context->shaderFormat) {
+    case SDL_GPU_SHADERFORMAT_SPIRV:
+        vertex_shader_source_len = rectangle_vertex_spirv_source_len;
+        vertex_shader_source = (Uint8*)rectangle_vertex_spirv_source;
+
+        fragment_shader_source_len = rectangle_fragment_spirv_source_len;
+        fragment_shader_source = (Uint8*)rectangle_fragment_spirv_source;
+        break;
+
+    case SDL_GPU_SHADERFORMAT_DXIL:
+        vertex_shader_source_len = rectangle_vertex_dxil_source_len;
+        vertex_shader_source = (Uint8*)rectangle_vertex_dxil_source;
+
+        fragment_shader_source_len = rectangle_fragment_dxil_source_len;
+        fragment_shader_source = (Uint8*)rectangle_fragment_dxil_source;
+        break;
+
+    default:
+        break;
+    }
+
     SDL_GPUShader* rectangleVertexShader = SDL_CreateGPUShader(
         app_context->device,
         &(SDL_GPUShaderCreateInfo){
-            .code = rectangle_vert_source,
-            .code_size = rectangle_vert_source_len,
-            .format = SDL_GPU_SHADERFORMAT_SPIRV,
+            .code = vertex_shader_source,
+            .code_size = vertex_shader_source_len,
+            .format = app_context->shaderFormat,
             .stage = SDL_GPU_SHADERSTAGE_VERTEX,
             .num_samplers = 0,
             .num_storage_buffers = 0,
@@ -42,9 +79,9 @@ static inline int AppContextLoadRectanglePipeline(AppContext* app_context) {
     SDL_GPUShader* rectangleFragmentShader = SDL_CreateGPUShader(
         app_context->device,
         &(SDL_GPUShaderCreateInfo){
-            .code = rectangle_frag_source,
-            .code_size = rectangle_frag_source_len,
-            .format = SDL_GPU_SHADERFORMAT_SPIRV,
+            .code = fragment_shader_source,
+            .code_size = fragment_shader_source_len,
+            .format = app_context->shaderFormat,
             .stage = SDL_GPU_SHADERSTAGE_FRAGMENT,
             .num_samplers = 0,
             .num_storage_buffers = 0,
@@ -92,12 +129,37 @@ static inline int AppContextLoadRectanglePipeline(AppContext* app_context) {
 }
 
 static inline int AppContextLoadCirclePipeline(AppContext* app_context) {
+    size_t vertex_shader_source_len, fragment_shader_source_len;
+    Uint8* vertex_shader_source;
+    Uint8* fragment_shader_source;
+
+    switch (app_context->shaderFormat) {
+    case SDL_GPU_SHADERFORMAT_SPIRV:
+        vertex_shader_source_len = circle_vertex_spirv_source_len;
+        vertex_shader_source = (Uint8*)circle_vertex_spirv_source;
+
+        fragment_shader_source_len = circle_fragment_spirv_source_len;
+        fragment_shader_source = (Uint8*)circle_fragment_spirv_source;
+        break;
+
+    case SDL_GPU_SHADERFORMAT_DXIL:
+        vertex_shader_source_len = circle_vertex_dxil_source_len;
+        vertex_shader_source = (Uint8*)circle_vertex_dxil_source;
+
+        fragment_shader_source_len = circle_fragment_dxil_source_len;
+        fragment_shader_source = (Uint8*)circle_fragment_dxil_source;
+        break;
+
+    default:
+        break;
+    }
+
     SDL_GPUShader* circleVertexShader = SDL_CreateGPUShader(
         app_context->device,
         &(SDL_GPUShaderCreateInfo){
-            .code = circle_vert_source,
-            .code_size = circle_vert_source_len,
-            .format = SDL_GPU_SHADERFORMAT_SPIRV,
+            .code = vertex_shader_source,
+            .code_size = vertex_shader_source_len,
+            .format = app_context->shaderFormat,
             .stage = SDL_GPU_SHADERSTAGE_VERTEX,
             .num_samplers = 0,
             .num_storage_buffers = 0,
@@ -114,9 +176,9 @@ static inline int AppContextLoadCirclePipeline(AppContext* app_context) {
     SDL_GPUShader* circleFragmentShader = SDL_CreateGPUShader(
         app_context->device,
         &(SDL_GPUShaderCreateInfo){
-            .code = circle_frag_source,
-            .code_size = circle_frag_source_len,
-            .format = SDL_GPU_SHADERFORMAT_SPIRV,
+            .code = fragment_shader_source,
+            .code_size = fragment_shader_source_len,
+            .format = app_context->shaderFormat,
             .stage = SDL_GPU_SHADERSTAGE_FRAGMENT,
             .num_samplers = 0,
             .num_storage_buffers = 0,
@@ -164,12 +226,37 @@ static inline int AppContextLoadCirclePipeline(AppContext* app_context) {
 }
 
 static inline int AppContextLoadTextPipeline(AppContext* app_context) {
+    size_t vertex_shader_source_len, fragment_shader_source_len;
+    Uint8* vertex_shader_source;
+    Uint8* fragment_shader_source;
+
+    switch (app_context->shaderFormat) {
+    case SDL_GPU_SHADERFORMAT_SPIRV:
+        vertex_shader_source_len = text_vertex_spirv_source_len;
+        vertex_shader_source = (Uint8*)text_vertex_spirv_source;
+
+        fragment_shader_source_len = text_fragment_spirv_source_len;
+        fragment_shader_source = (Uint8*)text_fragment_spirv_source;
+        break;
+
+    case SDL_GPU_SHADERFORMAT_DXIL:
+        vertex_shader_source_len = text_vertex_dxil_source_len;
+        vertex_shader_source = (Uint8*)text_vertex_dxil_source;
+
+        fragment_shader_source_len = text_fragment_dxil_source_len;
+        fragment_shader_source = (Uint8*)text_fragment_dxil_source;
+        break;
+
+    default:
+        break;
+    }
+
     SDL_GPUShader* textVertexShader = SDL_CreateGPUShader(
         app_context->device,
         &(SDL_GPUShaderCreateInfo){
-            .code = text_vert_source,
-            .code_size = text_vert_source_len,
-            .format = SDL_GPU_SHADERFORMAT_SPIRV,
+            .code = vertex_shader_source,
+            .code_size = vertex_shader_source_len,
+            .format = app_context->shaderFormat,
             .stage = SDL_GPU_SHADERSTAGE_VERTEX,
             .num_samplers = 0,
             .num_storage_buffers = 0,
@@ -187,9 +274,9 @@ static inline int AppContextLoadTextPipeline(AppContext* app_context) {
     SDL_GPUShader* textFragmentShader = SDL_CreateGPUShader(
         app_context->device,
         &(SDL_GPUShaderCreateInfo){
-            .code = text_frag_source,
-            .code_size = text_frag_source_len,
-            .format = SDL_GPU_SHADERFORMAT_SPIRV,
+            .code = fragment_shader_source,
+            .code_size = fragment_shader_source_len,
+            .format = app_context->shaderFormat,
             .stage = SDL_GPU_SHADERSTAGE_FRAGMENT,
             .num_samplers = 1,
             .num_storage_buffers = 0,
@@ -258,12 +345,37 @@ static inline int AppContextLoadTextPipeline(AppContext* app_context) {
 }
 
 static inline int AppContextLoadTextCursorPipeline(AppContext* app_context) {
+    size_t vertex_shader_source_len, fragment_shader_source_len;
+    Uint8* vertex_shader_source;
+    Uint8* fragment_shader_source;
+
+    switch (app_context->shaderFormat) {
+    case SDL_GPU_SHADERFORMAT_SPIRV:
+        vertex_shader_source_len = textcursor_vertex_spirv_source_len;
+        vertex_shader_source = (Uint8*)textcursor_vertex_spirv_source;
+
+        fragment_shader_source_len = textcursor_fragment_spirv_source_len;
+        fragment_shader_source = (Uint8*)textcursor_fragment_spirv_source;
+        break;
+
+    case SDL_GPU_SHADERFORMAT_DXIL:
+        vertex_shader_source_len = textcursor_vertex_dxil_source_len;
+        vertex_shader_source = (Uint8*)textcursor_vertex_dxil_source;
+
+        fragment_shader_source_len = textcursor_fragment_dxil_source_len;
+        fragment_shader_source = (Uint8*)textcursor_fragment_dxil_source;
+        break;
+
+    default:
+        break;
+    }
+
     SDL_GPUShader* textCursorVertexShader = SDL_CreateGPUShader(
         app_context->device,
         &(SDL_GPUShaderCreateInfo){
-            .code = textcursor_vert_source,
-            .code_size = textcursor_vert_source_len,
-            .format = SDL_GPU_SHADERFORMAT_SPIRV,
+            .code = vertex_shader_source,
+            .code_size = vertex_shader_source_len,
+            .format = app_context->shaderFormat,
             .stage = SDL_GPU_SHADERSTAGE_VERTEX,
             .num_samplers = 0,
             .num_storage_buffers = 0,
@@ -280,9 +392,9 @@ static inline int AppContextLoadTextCursorPipeline(AppContext* app_context) {
     SDL_GPUShader* textCursorFragmentShader = SDL_CreateGPUShader(
         app_context->device,
         &(SDL_GPUShaderCreateInfo){
-            .code = textcursor_frag_source,
-            .code_size = textcursor_frag_source_len,
-            .format = SDL_GPU_SHADERFORMAT_SPIRV,
+            .code = fragment_shader_source,
+            .code_size = fragment_shader_source_len,
+            .format = app_context->shaderFormat,
             .stage = SDL_GPU_SHADERSTAGE_FRAGMENT,
             .num_samplers = 0,
             .num_storage_buffers = 0,
@@ -356,8 +468,41 @@ int AppContextInit(AppContext* app_context, SDL_WindowFlags windowFlags, bool gp
         return -1;
     }
 
-    app_context->device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, gpuDebugEnabled, app_context->deviceName);
-    
+    if (app_context->deviceName == NULL) {
+        SDL_Log("ERROR: No device driver name was specified.\n");
+        return -1;
+    }
+
+    SDL_PropertiesID gpuProps = SDL_CreateProperties();
+    SDL_SetStringProperty(gpuProps, SDL_PROP_GPU_DEVICE_CREATE_NAME_STRING, (const char*)app_context->deviceName);
+    SDL_SetBooleanProperty(gpuProps, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, gpuDebugEnabled);
+
+    SDL_GPUVulkanOptions vkOptions = {0};
+    if (SDL_strcmp(app_context->deviceName, APP_CONTEXT_DEVICE_DRIVER_VULKAN) == 0) {
+        vkOptions.vulkan_api_version = VK_MAKE_API_VERSION(0, 1, 4, 0);
+
+        // In order for SV_VertexID in slang to work, shader draw paremeters extension must be enabled
+        VkPhysicalDeviceShaderDrawParametersFeatures shaderDrawParameters = {
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES,
+            .pNext = NULL,
+            .shaderDrawParameters = VK_TRUE,
+        };
+        vkOptions.feature_list = &shaderDrawParameters;
+        SDL_SetPointerProperty(gpuProps, SDL_PROP_GPU_DEVICE_CREATE_VULKAN_OPTIONS_POINTER, &vkOptions);
+
+        app_context->shaderFormat = SDL_GPU_SHADERFORMAT_SPIRV;
+        SDL_SetBooleanProperty(gpuProps, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true);
+    } else if (SDL_strcmp(app_context->deviceName, APP_CONTEXT_DEVICE_DRIVER_DIRECT3D12) == 0) {
+        app_context->shaderFormat = SDL_GPU_SHADERFORMAT_DXIL;
+        SDL_SetBooleanProperty(gpuProps, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_DXIL_BOOLEAN, true);
+    } else {
+        SDL_Log("ERROR: Unsupported device driver: %s", app_context->deviceName);
+        return -1;
+    }
+
+    app_context->device = SDL_CreateGPUDeviceWithProperties(gpuProps);
+    SDL_DestroyProperties(gpuProps);
+
     if (app_context->device == NULL) {
         SDL_Log("Failed to create GPU device: %s", SDL_GetError());
         return -1;

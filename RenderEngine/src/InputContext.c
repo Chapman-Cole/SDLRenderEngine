@@ -77,6 +77,46 @@ static inline int get_num_newlines(const char* buffer, int cursorIndex) {
     return numNewLines;
 }
 
+int InputContextCreate(InputContext* inputContext, AppContext* appContext, TTF_Font* font, float textColor[4], float cursorColor[4], InputContextLayout layout) {
+    inputContext->bufferCapacity = INPUT_CONTEXT_BASE_BUFFER_SIZE;
+    inputContext->bufferLen = 0;
+
+    inputContext->buffer = SDL_malloc(inputContext->bufferCapacity * sizeof(char));
+    if (inputContext->buffer == NULL) {
+        SDL_Log("Failed to allocate memory for InputContext: %s", SDL_GetError());
+        return -1;
+    }
+
+    // Make sure the buffer starts out as null terminated
+    inputContext->buffer[0] = '\0';
+    inputContext->cursorIndex = 0;
+
+    inputContext->cursorHeight = TTF_GetFontHeight(font);
+    inputContext->cursorX = 0;
+    inputContext->cursorY = 0;
+
+    inputContext->textColor[0] = textColor[0];
+    inputContext->textColor[1] = textColor[1];
+    inputContext->textColor[2] = textColor[2];
+    inputContext->textColor[3] = textColor[3];
+
+    inputContext->cursorColor[0] = cursorColor[0];
+    inputContext->cursorColor[1] = cursorColor[1];
+    inputContext->cursorColor[2] = cursorColor[2];
+    inputContext->cursorColor[3] = cursorColor[3];
+
+    inputContext->layout = layout;
+    inputContext->prevLayout = inputContext->layout;
+
+    inputContext->keySequencesLen = 0;
+    SDL_zeroa(inputContext->keySequences);
+
+    inputContext->font = font;
+
+    GPUTextCreate(&inputContext->gpuText, appContext, font, "", 0, textColor);
+    return 0;
+}
+
 static inline int InputContextBufferInsert(InputContext* inputContext, const char* text) {
     int textLen = SDL_strlen(text);
 

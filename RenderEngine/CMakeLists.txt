@@ -20,6 +20,9 @@ endif()
 
 find_package(SDL3 REQUIRED)
 
+# Vulkan is only required to get the macro for making the api version
+find_package(Vulkan REQUIRED)
+
 # Find SDL_ttf on system path
 find_path(sdl_ttf_header_path NAMES SDL3_ttf)
 if(NOT DEFINED sdl_ttf_header_path)
@@ -33,7 +36,7 @@ endif()
 
 target_include_directories(RenderEngine PUBLIC ${sdl_ttf_header_path} "include/" ${CMAKE_SOURCE_DIR})
 
-target_link_libraries(RenderEngine PUBLIC SDL3::SDL3 ${sdl_ttf_library_path})
+target_link_libraries(RenderEngine PUBLIC SDL3::SDL3 ${sdl_ttf_library_path} PRIVATE Vulkan::Vulkan)
 
 add_dependencies(RenderEngine BuiltinShaders CompiledShaders)
 

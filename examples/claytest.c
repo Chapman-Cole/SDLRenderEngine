@@ -44,21 +44,26 @@ void SidebarItemComponent(int id, int fontId) {
     }
 }
 
+#ifdef _WIN32
+    static const char* font_path = "C:\\WINDOWS\\FONTS\\SEGUIVAR.TTF";
+#elif defined(__linux__)
+    static const char* font_path = "/usr/share/fonts/source-foundry-hack-fonts/Hack-Regular.ttf";
+#endif
+
 AppContext appContext = {0};
 FontRegistry fontRegistry;
 FontRegistryKey HackRegular12;
 InputContext inputContext;
 ClayCompositor clayCompositor;
-float prevTime = 0.0f;
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     appContext.windowName = "ClayTest";
-    appContext.deviceName = NULL;
+    appContext.deviceName = APP_CONTEXT_DEVICE_DRIVER_VULKAN;
     AppContextInit(&appContext, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY, false);
     SDL_SetGPUSwapchainParameters(appContext.device, appContext.window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_IMMEDIATE);
 
     FontRegistryCreate(&fontRegistry, &appContext);
-    FontRegistrySet(&fontRegistry, "Hack-Regular12", "/usr/share/fonts/source-foundry-hack-fonts/Hack-Regular.ttf", 12.0f);
+    FontRegistrySet(&fontRegistry, "Hack-Regular12", font_path, 12.0f);
     HackRegular12 = FontRegistryGenKey(&fontRegistry, "Hack-Regular12");
 
     InputContextCreate(&inputContext, &appContext, FontRegistryGetWithKey(&fontRegistry, HackRegular12), (float[4]){0.0, 0.0, 0.0, 1.0}, (float[4]){0.0, 0.0, 0.0, 1.0}, (InputContextLayout){.x = 0, .y = 0, .width = 100.0f, .height = 100.0f});
@@ -71,17 +76,13 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     Clay_Initialize(arena, (Clay_Dimensions){640, 480}, (Clay_ErrorHandler){HandleClayErrors});
     Clay_SetMeasureTextFunction(measureText, &fontRegistry);
 
-    float prevTime = (float)SDL_GetTicks() / 1000.0f;
-
     SDL_StartTextInput(appContext.window);
 
     return SDL_APP_CONTINUE;
 }
 
 SDL_AppResult SDL_AppIterate(void* appstate) {
-    float currTime = (float)SDL_GetTicks() / 1000.0f;
-    float deltaTime = currTime - prevTime;
-    prevTime = currTime;
+    AppContextUpdate(&appContext);
 
     RenderContext renderContext = {0};
     renderContext.texture = NULL;
@@ -111,6 +112,27 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
                 int buffLen = SDL_snprintf(buff2, 200, "(%d,%d)", textWidth, textHeight);
                 CLAY_TEXT(((Clay_String){.chars = buff2, .length = buffLen, .isStaticallyAllocated = false}), {.fontSize = 12, .fontId = HackRegular12, .textColor = {0, 0, 0, 255}});
             }
+
+            CLAY(CLAY_ID("SideBarElement3"), sidebarItemConfig) {
+                static char buff3[200] = {0};
+                static int buff3_len = 0;
+                static double buff3_fps = 0.0;
+                static int buff3_frame_counter = 0;
+                static double buff3_time_tracker = 0.0;
+
+                buff3_fps += 1.0 / appContext.deltaTime;
+                buff3_frame_counter++;
+                buff3_time_tracker += appContext.deltaTime;
+
+                if (buff3_time_tracker >= 0.1) {
+                    buff3_len = SDL_snprintf(buff3, 200, "FPS: %d", (int)(buff3_fps / (double)buff3_frame_counter));
+                    buff3_frame_counter = 0;
+                    buff3_time_tracker = 0.0;
+                    buff3_fps = 0.0;
+                }
+
+                CLAY_TEXT(((Clay_String){.chars = buff3, .length = buff3_len, .isStaticallyAllocated = false}), {.fontSize = 12, .fontId = HackRegular12, .textColor = {0, 0, 0, 255}});
+            }
         }
 
         CLAY(CLAY_ID("MainContent"), {.layout = {.sizing = {.width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16)}, .backgroundColor = COLOR_LIGHT}) {
@@ -118,7 +140,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
         }
     }
 
-    Clay_RenderCommandArray clayRenderCommands = Clay_EndLayout(deltaTime);
+    Clay_RenderCommandArray clayRenderCommands = Clay_EndLayout(appContext.deltaTime);
     ClayCompositorRenderCommands(&clayCompositor, &renderContext, &clayRenderCommands);
 
     RenderContextEnd(&renderContext);

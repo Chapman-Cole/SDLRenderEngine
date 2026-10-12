@@ -1,4 +1,7 @@
+
+#define SDL_MAIN_USE_CALLBACKS
 #include "SDL3/SDL.h"
+#include "SDL3/SDL_main.h"
 #include "SDLRenderEngine.h"
 #include "stdlib.h"
 
@@ -7,52 +10,88 @@ static float vertices[] = {-1.0f, -1.0f, 0.0f, 1.0f, -1.0f, 0.0f, -1.0f, 1.0f, 0
 static Uint16 indices[] = {0, 1, 2, 1, 3, 2};
 
 #ifdef _WIN32
-    static const char* font_path = "C:\\WINDOWS\\FONTS\\SEGUIVAR.TTF";
+static const char* font_path = "C:\\WINDOWS\\FONTS\\SEGUIVAR.TTF";
 #elif defined(__linux__)
-    static const char* font_path = "/usr/share/fonts/source-foundry-hack-fonts/Hack-Regular.ttf";
+static const char* font_path = "/usr/share/fonts/source-foundry-hack-fonts/Hack-Regular.ttf";
 #endif
 
-int main(int argc, char* argv[]) {
-    AppContext appContext = {0};
+static AppContext appContext = {0};
+static FontRegistry fontRegistry;
+static InputContext inputContext;
+static GPUText fpsText;
+
+SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     appContext.windowName = "Renderer";
-    appContext.deviceName = NULL;
+    appContext.deviceName = APP_CONTEXT_DEVICE_DRIVER_VULKAN;
     AppContextInit(&appContext, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY, true);
     SDL_SetGPUSwapchainParameters(appContext.device, appContext.window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_IMMEDIATE);
 
-    FontRegistry fontRegistry;
     FontRegistryCreate(&fontRegistry, &appContext);
     FontRegistrySet(&fontRegistry, "Hack-Regular15", font_path, 15.0f);
 
     SDL_StartTextInput(appContext.window);
 
-    InputContext inputContext;
-    InputContextCreate(&inputContext, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"), (float[4]){1.0, 1.0, 1.0, 1.0f}, (float[4]){1.0, 1.0, 1.0, 1.0f}, (InputContextLayout){.x = 100.0f, .y = 100.0f, .width = 500.0f, .height = 1000.0f});
+    InputContextCreate(&inputContext, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"), (float[4]){1.0, 1.0, 1.0, 1.0f}, (float[4]){1.0, 1.0, 1.0, 1.0f}, (InputContextLayout){.x = 100.0f, .y = 100.0f, .width = 2000.0f, .height = 1000.0f});
 
-    bool shouldContinue = true;
-    while (shouldContinue) {
-        SDL_Event event;
-        InputContextBegin(&inputContext);
-        while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_EVENT_QUIT) {
-                shouldContinue = false;
-                continue;
-            }
+    GPUTextCreate(&fpsText, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"), "FPS:", 0, (float[4]){1.0, 1.0, 1.0, 1.0});
 
-            InputContextUpdate(&inputContext, &event);
-        }
-        InputContextEnd(&inputContext);
+    return SDL_APP_CONTINUE;
+}
 
-        RenderContext renderContext = {0};
-        renderContext.texture = NULL;
+SDL_AppResult SDL_AppIterate(void* appstate) {
+    AppContextUpdate(&appContext);
 
-        if (RenderContextBegin(&renderContext, &appContext, NULL) < 0) {
-            exit(-1);
-        }
+    static char buff[200] = {0};
+    static int buffLen = 0;
+    static double fps_counter = 0.0;
+    static int frame_counter = 0;
+    static double fps_time_tracker = 0.0;
 
-        DrawInputContext(&renderContext, &inputContext);
+    fps_counter += 1.0 / appContext.deltaTime;
+    fps_time_tracker += appContext.deltaTime;
+    frame_counter++;
 
-        RenderContextEnd(&renderContext);
+    if (fps_time_tracker >= 0.2) {
+        SDL_snprintf(buff, 200, "FPS: %d", (int)(fps_counter / (double)frame_counter));
+        
+        GPUTextUpdate(&fpsText, buff, buffLen);
+
+        fps_counter = 0.0;
+        frame_counter = 0;
+        fps_time_tracker = 0.0;
     }
+
+    GPUTextCreate(&fpsText, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"), buff, buffLen, (float[4]){1.0, 1.0, 1.0, 1.0});
+
+    RenderContext renderContext = {0};
+    renderContext.texture = NULL;
+
+    if (RenderContextBegin(&renderContext, &appContext, NULL) < 0) {
+        exit(-1);
+    }
+
+    DrawText(&renderContext, &fpsText, (float[2]){renderContext.renderWidth - fpsText.width, renderContext.renderHeight - fpsText.height});
+    DrawInputContext(&renderContext, &inputContext);
+
+    RenderContextEnd(&renderContext);
+
+    return SDL_APP_CONTINUE;
+}
+
+SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
+    if (event->type == SDL_EVENT_QUIT) {
+        return SDL_APP_SUCCESS;
+    }
+
+    InputContextBegin(&inputContext);
+    InputContextUpdate(&inputContext, event);
+    InputContextEnd(&inputContext);
+
+    return SDL_APP_CONTINUE;
+}
+
+void SDL_AppQuit(void* appstate, SDL_AppResult result) {
+    GPUTextDestroy(&fpsText);
 
     InputContextDestroy(&inputContext);
 
@@ -61,5 +100,4 @@ int main(int argc, char* argv[]) {
     FontRegistryDestroy(&fontRegistry);
 
     AppContextTerminate(&appContext);
-    return 0;
 }
