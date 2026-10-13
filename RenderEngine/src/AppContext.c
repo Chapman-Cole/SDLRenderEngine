@@ -32,9 +32,10 @@ static SDL_GPUColorTargetBlendState DefaultBlendState = {
 };
 
 static inline int AppContextLoadRectanglePipeline(AppContext* app_context) {
-    size_t vertex_shader_source_len, fragment_shader_source_len;
-    Uint8* vertex_shader_source;
-    Uint8* fragment_shader_source;
+    size_t vertex_shader_source_len = 0;
+    size_t fragment_shader_source_len = 0;
+    Uint8* vertex_shader_source = NULL;
+    Uint8* fragment_shader_source = NULL;
 
     switch (app_context->shaderFormat) {
     case SDL_GPU_SHADERFORMAT_SPIRV:
@@ -46,11 +47,13 @@ static inline int AppContextLoadRectanglePipeline(AppContext* app_context) {
         break;
 
     case SDL_GPU_SHADERFORMAT_DXIL:
+        #ifdef _WIN32
         vertex_shader_source_len = rectangle_vertex_dxil_source_len;
         vertex_shader_source = (Uint8*)rectangle_vertex_dxil_source;
 
         fragment_shader_source_len = rectangle_fragment_dxil_source_len;
         fragment_shader_source = (Uint8*)rectangle_fragment_dxil_source;
+        #endif
         break;
 
     default:
@@ -129,9 +132,10 @@ static inline int AppContextLoadRectanglePipeline(AppContext* app_context) {
 }
 
 static inline int AppContextLoadCirclePipeline(AppContext* app_context) {
-    size_t vertex_shader_source_len, fragment_shader_source_len;
-    Uint8* vertex_shader_source;
-    Uint8* fragment_shader_source;
+    size_t vertex_shader_source_len = 0;
+    size_t fragment_shader_source_len = 0;
+    Uint8* vertex_shader_source = NULL;
+    Uint8* fragment_shader_source = NULL;
 
     switch (app_context->shaderFormat) {
     case SDL_GPU_SHADERFORMAT_SPIRV:
@@ -143,11 +147,13 @@ static inline int AppContextLoadCirclePipeline(AppContext* app_context) {
         break;
 
     case SDL_GPU_SHADERFORMAT_DXIL:
+        #ifdef _WIN32
         vertex_shader_source_len = circle_vertex_dxil_source_len;
         vertex_shader_source = (Uint8*)circle_vertex_dxil_source;
 
         fragment_shader_source_len = circle_fragment_dxil_source_len;
         fragment_shader_source = (Uint8*)circle_fragment_dxil_source;
+        #endif
         break;
 
     default:
@@ -226,9 +232,10 @@ static inline int AppContextLoadCirclePipeline(AppContext* app_context) {
 }
 
 static inline int AppContextLoadTextPipeline(AppContext* app_context) {
-    size_t vertex_shader_source_len, fragment_shader_source_len;
-    Uint8* vertex_shader_source;
-    Uint8* fragment_shader_source;
+    size_t vertex_shader_source_len = 0;
+    size_t fragment_shader_source_len = 0;
+    Uint8* vertex_shader_source = NULL;
+    Uint8* fragment_shader_source = NULL;
 
     switch (app_context->shaderFormat) {
     case SDL_GPU_SHADERFORMAT_SPIRV:
@@ -240,11 +247,13 @@ static inline int AppContextLoadTextPipeline(AppContext* app_context) {
         break;
 
     case SDL_GPU_SHADERFORMAT_DXIL:
+        #ifdef _WIN32
         vertex_shader_source_len = text_vertex_dxil_source_len;
         vertex_shader_source = (Uint8*)text_vertex_dxil_source;
 
         fragment_shader_source_len = text_fragment_dxil_source_len;
         fragment_shader_source = (Uint8*)text_fragment_dxil_source;
+        #endif
         break;
 
     default:
@@ -345,9 +354,10 @@ static inline int AppContextLoadTextPipeline(AppContext* app_context) {
 }
 
 static inline int AppContextLoadTextCursorPipeline(AppContext* app_context) {
-    size_t vertex_shader_source_len, fragment_shader_source_len;
-    Uint8* vertex_shader_source;
-    Uint8* fragment_shader_source;
+    size_t vertex_shader_source_len = 0;
+    size_t fragment_shader_source_len = 0;
+    Uint8* vertex_shader_source = NULL;
+    Uint8* fragment_shader_source = NULL;
 
     switch (app_context->shaderFormat) {
     case SDL_GPU_SHADERFORMAT_SPIRV:
@@ -359,11 +369,13 @@ static inline int AppContextLoadTextCursorPipeline(AppContext* app_context) {
         break;
 
     case SDL_GPU_SHADERFORMAT_DXIL:
+        #ifdef _WIN32
         vertex_shader_source_len = textcursor_vertex_dxil_source_len;
         vertex_shader_source = (Uint8*)textcursor_vertex_dxil_source;
 
         fragment_shader_source_len = textcursor_fragment_dxil_source_len;
         fragment_shader_source = (Uint8*)textcursor_fragment_dxil_source;
+        #endif
         break;
 
     default:

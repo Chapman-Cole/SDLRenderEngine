@@ -1,5 +1,6 @@
 #include "GPUTransferContext.h"
 #include "DynamicArray.h"
+#include <stddef.h>
 
 // It may be ideal to change this size later on, but for now
 // a megabyte should be a good transfer buffer size for each of them

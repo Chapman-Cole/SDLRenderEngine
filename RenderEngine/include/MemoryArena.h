@@ -1,7 +1,8 @@
 #ifndef MEMORYARENA_H
 #define MEMORYARENA_H
 
-#include "stdint.h"
+#include <stdint.h>
+#include <stddef.h>
 
 typedef struct MemoryArenaBlock {
     void* base;
