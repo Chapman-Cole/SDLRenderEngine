@@ -462,7 +462,7 @@ static inline int AppContextLoadTextCursorPipeline(AppContext* app_context) {
     return true;
 }
 
-int AppContextInit(AppContext* app_context, SDL_WindowFlags windowFlags, bool gpuDebugEnabled) {
+int AppContextInit(AppContext* app_context, SDL_WindowFlags windowFlags, bool gpuDebugEnabled, size_t transferContextArenaSize) {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         SDL_Log("Failed to initialize video subsystem: %s", SDL_GetError());
         return -1;
@@ -559,10 +559,16 @@ int AppContextInit(AppContext* app_context, SDL_WindowFlags windowFlags, bool gp
         return -1;
     }
 
+    if (GPUTransferContextCreate(&app_context->transferContext, APP_CONTEXT_DEVICE(*app_context), transferContextArenaSize) < 0) {
+        return -1;
+    }
+
     return 0;
 }
 
 int AppContextTerminate(AppContext* app_context) {
+    GPUTransferContextDestroy(&app_context->transferContext);
+
     SDL_ReleaseGPUSampler(app_context->device, app_context->textSampler);
 
     SDL_ReleaseGPUGraphicsPipeline(app_context->device, app_context->builtinPipelines[BUILTIN_PIPELINE_RECTANGLE]);

@@ -3,7 +3,7 @@
 
 #include "DrawFunctions.h"
 #include "FontRegistry.h"
-#include "GPUBuffers.h"
+#include "GPUTransferContext.h"
 #include "InputContext.h"
 #include "Shaders.h"
 #include "DynamicArray.h"

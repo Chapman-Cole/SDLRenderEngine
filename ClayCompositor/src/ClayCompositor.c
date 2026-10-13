@@ -60,6 +60,7 @@ void ClayCompositorRenderCommands(ClayCompositor* clayCompositor, RenderContext*
             Clay_TextRenderData* config = &command->renderData.text;
             float textColor[4] = {config->textColor.r / 255.0f, config->textColor.g / 255.0f, config->textColor.b / 255.0f, config->textColor.a / 255.0f};
             ClayCompositorAppendTextObject(clayCompositor, config->stringContents.chars, config->stringContents.length, config->fontId, textColor);
+            APP_CONTEXT_FLUSH_TRANSFER_CONTEXT(*clayCompositor->appContext);
             DrawText(renderContext, &clayCompositor->textObjects[clayCompositor->textObjectsLen - 1], (float[2]){bounding_box.x, bounding_box.y});
         } break;
 

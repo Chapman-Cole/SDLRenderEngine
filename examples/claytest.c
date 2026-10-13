@@ -59,7 +59,7 @@ ClayCompositor clayCompositor;
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     appContext.windowName = "ClayTest";
     appContext.deviceName = APP_CONTEXT_DEVICE_DRIVER_VULKAN;
-    AppContextInit(&appContext, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY, false);
+    AppContextInit(&appContext, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY, false, 1'000'00);
     SDL_SetGPUSwapchainParameters(appContext.device, appContext.window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_IMMEDIATE);
 
     FontRegistryCreate(&fontRegistry, &appContext);

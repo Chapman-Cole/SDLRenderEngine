@@ -1,0 +1,72 @@
+#include "MemoryArena.h"
+#include "DynamicArray.h"
+#include "SDL3/SDL.h"
+
+int MemoryArena_create(MemoryArena* arena, size_t size) {
+    DYNAMIC_ARRAY_INIT((*arena));
+
+    MemoryArenaBlock block;
+    block.base = SDL_malloc(size);
+    if (block.base == NULL) {
+        SDL_Log("Failed to allocate memory for arena: %s", SDL_GetError());
+        return -1;
+    }
+    block.capacity = size;
+    block.tracker = block.base;
+    block.amountAllocated = 0;
+
+    DYNAMIC_ARRAY_APPEND((*arena), block);
+
+    return 0;
+}
+
+void* MemoryArena_allocate(MemoryArena* arena, size_t size) {
+    for (int i = 0; i < arena->len; i++) {
+        if (arena->arr[i].amountAllocated + size > arena->arr[i].capacity) {
+            continue;
+        }
+
+        void* ptr = (void*)arena->arr[i].tracker;
+        arena->arr[i].tracker += size;
+        arena->arr[i].amountAllocated += size;
+
+        return ptr;
+    }
+
+    // If the function makes it here, that means there was no space available, so allocate a new block
+    MemoryArenaBlock new_block = {0};
+    new_block.base = SDL_malloc(arena->arr[0].capacity);
+    if (new_block.base == NULL) {
+        SDL_Log("Failed to allocate memory for arena: %s", SDL_GetError());
+        return NULL;
+    }
+    new_block.capacity = arena->arr[0].capacity;
+    new_block.tracker = new_block.base;
+    new_block.amountAllocated = 0;
+
+    void* ptr = (void*)new_block.tracker;
+    new_block.tracker += size;
+    new_block.amountAllocated += size;
+
+    // Must come after all the values for new_block are updated that way the arena
+    // stores the most up-to-date information (I ran in to the classic error of appending and then updating
+    // the new_block variable instead of the actual data inside the arena array)
+    DYNAMIC_ARRAY_APPEND((*arena), new_block);
+
+    return ptr;
+}
+
+void MemoryArena_clear(MemoryArena* arena) {
+    for (int i = 0; i < arena->len; i++) {
+        arena->arr[i].tracker = arena->arr[i].base;
+        arena->arr[i].amountAllocated = 0;
+    }
+}
+
+int MemoryArena_destroy(MemoryArena* arena) {
+    for (int i = 0; i < arena->len; i++) {
+        SDL_free(arena->arr[i].base);
+    }
+    DYNAMIC_ARRAY_FREE((*arena));
+    return 0;
+}

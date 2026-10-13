@@ -3,6 +3,7 @@
 
 #include "SDL3/SDL.h"
 #include "SDL3_ttf/SDL_ttf.h"
+#include "GPUTransferContext.h"
 
 #define APP_CONTEXT_DEVICE_DRIVER_VULKAN "vulkan"
 #define APP_CONTEXT_DEVICE_DRIVER_DIRECT3D12 "direct3d12"
@@ -17,6 +18,7 @@ enum BuiltinPipelineIndex {
 };
 
 typedef struct AppContext {
+    GPUTransferContext transferContext;
     const char* deviceName;
     const char* windowName;
     SDL_Window* window;
@@ -30,13 +32,20 @@ typedef struct AppContext {
     double deltaTime;
 } AppContext;
 
-int AppContextInit(AppContext* app_context, SDL_WindowFlags windowFlags, bool gpuDebugEnabled);
+#define APP_CONTEXT_DEVICE(appContext) ((appContext).device)
 
-// Should be called every frame to get accurate updates of the current time value and the delta time
+// Forces the app context to immediately submit all pending gpu uploads
+#define APP_CONTEXT_FLUSH_TRANSFER_CONTEXT(appContext) (GPUTransferContextSubmit(&((appContext).transferContext)))
+
+int AppContextInit(AppContext* app_context, SDL_WindowFlags windowFlags, bool gpuDebugEnabled, size_t transferContextArenaSize);
+
+// Must be called at the start of every frame to get accurate updates of the current time value and the delta time
 static inline void AppContextUpdate(AppContext* app_context) {
     double prevTime = app_context->time;
     app_context->time = (double)SDL_GetTicksNS() / 1'000'000'000.0;
     app_context->deltaTime = app_context->time - prevTime;
+
+    GPUTransferContextSubmit(&app_context->transferContext);
 }
 
 int AppContextTerminate(AppContext* app_context);

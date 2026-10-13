@@ -2,11 +2,12 @@ add_library(RenderEngine STATIC
     src/AppContext.c 
     src/RenderContext.c 
     src/Shaders.c 
-    src/GPUBuffers.c 
+    src/GPUTransferContext.c 
     src/DrawFunctions.c 
     src/GPUText.c
     src/FontRegistry.c
     src/InputContext.c
+    src/MemoryArena.c
 )
 
 if (ENABLE_ASAN)

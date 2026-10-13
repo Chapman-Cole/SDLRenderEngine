@@ -1,5 +1,5 @@
 #include "GPUText.h"
-#include "GPUBuffers.h"
+#include "GPUTransferContext.h"
 
 typedef SDL_FPoint Vec2;
 
@@ -41,8 +41,6 @@ static inline int generateGPUBuffers(GPUText* renderText, AppContext* appContext
     renderText->atlasses = SDL_calloc(numAtlasses, sizeof(TextSequence));
 
     numAtlasses = 0;
-    GPUTransferContext transferContext = {0};
-    GPUTransferContextBegin(&transferContext, appContext);
     for (; sequence != NULL; sequence = sequence->next) {
         TextVertex* vertices = SDL_calloc(sequence->num_vertices, sizeof(TextVertex));
         int* indices = SDL_calloc(sequence->num_indices, sizeof(int));
@@ -85,8 +83,8 @@ static inline int generateGPUBuffers(GPUText* renderText, AppContext* appContext
             return -1;
         }
 
-        GPUTransferContextUpload(&transferContext, textSequence.vertexBuffer, vertices, sequence->num_vertices * sizeof(TextVertex));
-        GPUTransferContextUpload(&transferContext, textSequence.indexBuffer, indices, sequence->num_indices * sizeof(int));
+        GPUTransferContextUpload(&appContext->transferContext, textSequence.vertexBuffer, vertices, sequence->num_vertices * sizeof(TextVertex));
+        GPUTransferContextUpload(&appContext->transferContext, textSequence.indexBuffer, indices, sequence->num_indices * sizeof(int));
 
         SDL_free(vertices);
         SDL_free(indices);
@@ -95,7 +93,6 @@ static inline int generateGPUBuffers(GPUText* renderText, AppContext* appContext
 
         numAtlasses++;
     }
-    GPUTransferContextEnd(&transferContext);
 
     return 0;
 }
