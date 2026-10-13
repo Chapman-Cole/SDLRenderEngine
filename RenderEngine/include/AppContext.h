@@ -35,7 +35,7 @@ typedef struct AppContext {
 #define APP_CONTEXT_DEVICE(appContext) ((appContext).device)
 
 // Forces the app context to immediately submit all pending gpu uploads
-#define APP_CONTEXT_FLUSH_TRANSFER_CONTEXT(appContext) (GPUTransferContextSubmit(&((appContext).transferContext)))
+#define APP_CONTEXT_FLUSH_TRANSFER_CONTEXT(appContext) (GPUTransferContextSubmit(&((appContext).transferContext)));
 
 int AppContextInit(AppContext* app_context, SDL_WindowFlags windowFlags, bool gpuDebugEnabled, size_t transferContextArenaSize);
 

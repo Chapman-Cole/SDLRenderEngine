@@ -7,7 +7,7 @@
 #define TRANSFER_BUFFER_SIZE 1'000'000
 
 int GPUTransferContextCreate(GPUTransferContext* transferContext, SDL_GPUDevice* device, size_t arenaSize) {
-    MemoryArena_create(&transferContext->arena, arenaSize);
+    MemoryArena_create(&transferContext->dataStagingArena, arenaSize);
 
     DYNAMIC_ARRAY_INIT(transferContext->transferBuffers);
 
@@ -35,7 +35,7 @@ int GPUTransferContextCreate(GPUTransferContext* transferContext, SDL_GPUDevice*
 }
 
 int GPUTransferContextDestroy(GPUTransferContext* transferContext) {
-    MemoryArena_destroy(&transferContext->arena);
+    MemoryArena_destroy(&transferContext->dataStagingArena);
 
     for (int i = 0; i < transferContext->transferBuffers.len; i++) {
         SDL_ReleaseGPUTransferBuffer(transferContext->device, transferContext->transferBuffers.arr[i].transferBuffer);
@@ -113,8 +113,8 @@ int GPUTransferContextSubmit(GPUTransferContext* transferContext) {
         transferContext->transferBuffers.arr[i].amountFilled = 0;
     }
 
-    DYNAMIC_ARRAY_FREE(transferContext->contextInfo);
-    MemoryArena_clear(&transferContext->arena);
+    DYNAMIC_ARRAY_CLEAR(transferContext->contextInfo);
+    MemoryArena_clear(&transferContext->dataStagingArena);
 
     return 0;
 }
@@ -167,7 +167,7 @@ int GPUTransferContextUpload(GPUTransferContext* transferContext, SDL_GPUBuffer*
     // This is done to ensure the data persists in memory by upload time, as the provided data pointer
     // be de-allocated by the program before GPUTransferContextSubmit is called, and mapping of the data
     // to the transfer buffer is handled then
-    transferContextInfo.data = MemoryArena_allocate(&transferContext->arena, data_size);
+    transferContextInfo.data = MemoryArena_allocate(&transferContext->dataStagingArena, data_size);
     SDL_memcpy(transferContextInfo.data, data, data_size);
 
     transferContextInfo.dataSize = data_size;

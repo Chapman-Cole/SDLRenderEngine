@@ -33,7 +33,7 @@ typedef struct TransferBufferInfoArray {
 typedef struct GPUTransferContext {
     TransferContextInfoArray contextInfo;
     TransferBufferInfoArray transferBuffers;
-    MemoryArena arena;
+    MemoryArena dataStagingArena;
     SDL_GPUCommandBuffer* cmdbuf;
     SDL_GPUCopyPass* copyPass;
     SDL_GPUDevice* device;

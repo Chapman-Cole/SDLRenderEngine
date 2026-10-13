@@ -100,4 +100,8 @@ static inline int _dynamic_array_shrink(void* arrayStruct, DynamicArrayInfo* arr
     SDL_memcpy(&((dst).arr[index]), (src).arr, (src).len * sizeof(*((src).arr))); \
     (dst).len += (src).len;
 
+// Useful for when preserving the buffer is desired (typically for performance reasons since freeing and allocating memory is slow)
+// but the dynamic buffer needs to start appending elements from the beginning of the array
+#define DYNAMIC_ARRAY_CLEAR(arrayStruct) (arrayStruct).len = 0;
+
 #endif

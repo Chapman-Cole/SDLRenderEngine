@@ -5,10 +5,6 @@
 #include "SDLRenderEngine.h"
 #include "stdlib.h"
 
-static float vertices[] = {-1.0f, -1.0f, 0.0f, 1.0f, -1.0f, 0.0f, -1.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f};
-
-static Uint16 indices[] = {0, 1, 2, 1, 3, 2};
-
 #ifdef _WIN32
 static const char* font_path = "C:\\WINDOWS\\FONTS\\SEGUIVAR.TTF";
 #elif defined(__linux__)
