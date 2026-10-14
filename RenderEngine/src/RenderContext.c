@@ -4,6 +4,11 @@
 int RenderContextBegin(RenderContext* renderContext, AppContext* appContext, SDL_GPUTexture* target) {
     renderContext->appContext = appContext;
 
+    // First thing that should be done is flushing the app context so that all
+    // pending transfers are pushed to the gpu before rendering in case
+    // any of the subsequent calls rely on the pending data
+    APP_CONTEXT_FLUSH_TRANSFER_CONTEXT(*renderContext->appContext);
+
     renderContext->cmdbuf = SDL_AcquireGPUCommandBuffer(appContext->device);
     if (renderContext->cmdbuf == NULL) {
         SDL_Log("Failed to acquire gpu command buffer: %s", SDL_GetError());

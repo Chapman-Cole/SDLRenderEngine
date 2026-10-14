@@ -60,7 +60,8 @@ static inline int generateGPUBuffers(GPUText* renderText, AppContext* appContext
             &(SDL_GPUBufferCreateInfo){
                 .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
                 .size = sequence->num_vertices * sizeof(TextVertex),
-                .props = 0});
+                .props = 0,
+            });
 
         if (textSequence.vertexBuffer == NULL) {
             SDL_Log("Failed to create a vertex buffer for text object: %s", SDL_GetError());
@@ -74,7 +75,8 @@ static inline int generateGPUBuffers(GPUText* renderText, AppContext* appContext
             &(SDL_GPUBufferCreateInfo){
                 .usage = SDL_GPU_BUFFERUSAGE_INDEX,
                 .size = sequence->num_indices * sizeof(int),
-                .props = 0});
+                .props = 0,
+            });
 
         if (textSequence.indexBuffer == NULL) {
             SDL_Log("Failed to create index buffer for text object: %s", SDL_GetError());
@@ -155,5 +157,14 @@ int GPUTextUpdate(GPUText* renderText, const char* text, uint32_t length) {
         return -1;
     }
 
+    return 0;
+}
+
+int GPUTextUpdateFont(GPUText* renderText, TTF_Font* font) {
+    renderText->font = font;
+    TTF_SetTextFont(renderText->text, renderText->font);
+    if (generateGPUBuffers(renderText, renderText->appContext) < 0) {
+        return -1;
+    }
     return 0;
 }

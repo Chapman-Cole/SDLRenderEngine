@@ -7,6 +7,7 @@
 
 #define APP_CONTEXT_DEVICE_DRIVER_VULKAN "vulkan"
 #define APP_CONTEXT_DEVICE_DRIVER_DIRECT3D12 "direct3d12"
+#define APP_CONTEXT_DEVICE_DRIVER_AGNOSTIC NULL
 
 #define APP_CONTEXT_BUILTIN_PIPELINES_MAX 12
 
@@ -44,8 +45,6 @@ static inline void AppContextUpdate(AppContext* app_context) {
     double prevTime = app_context->time;
     app_context->time = (double)SDL_GetTicksNS() / 1'000'000'000.0;
     app_context->deltaTime = app_context->time - prevTime;
-
-    GPUTransferContextSubmit(&app_context->transferContext);
 }
 
 int AppContextTerminate(AppContext* app_context);

@@ -108,8 +108,8 @@ int InputContextCreate(InputContext* inputContext, AppContext* appContext, TTF_F
     inputContext->layout = layout;
     inputContext->prevLayout = inputContext->layout;
 
-    inputContext->keySequencesLen = 0;
-    SDL_zeroa(inputContext->keySequences);
+    inputContext->bufferWasModified = false;
+    inputContext->cursorWasModified = false;
 
     inputContext->font = font;
 
@@ -229,7 +229,7 @@ static inline int InputContextGenTextWrap(InputContext* inputContext) {
     return 0;
 }
 
-int InputContextUpdate(InputContext* inputContext, SDL_Event* event) {
+int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
     bool bufferModified = false;
     bool cursorModified = false;
 
@@ -240,6 +240,8 @@ int InputContextUpdate(InputContext* inputContext, SDL_Event* event) {
     } break;
 
     case SDL_EVENT_KEY_DOWN: {
+        const bool* key_states = SDL_GetKeyboardState(NULL);
+
         switch (event->key.key) {
         case SDLK_BACKSPACE: {
             if (inputContext->cursorIndex == 0) {
@@ -356,22 +358,14 @@ int InputContextUpdate(InputContext* inputContext, SDL_Event* event) {
             cursorModified = true;
         } break;
 
-        case SDLK_LCTRL: {
-            if (inputContext->keySequencesLen >= INPUT_CONTEXT_KEY_SEQUENCE_MAX) {
-                inputContext->keySequencesLen = 0;
-            }
-
-            inputContext->keySequences[inputContext->keySequencesLen] = SDLK_LCTRL;
-            inputContext->keySequencesLen++;
-        } break;
-
+        // Process ctrl + v for pasting
         case SDLK_V: {
-            if (inputContext->keySequencesLen >= INPUT_CONTEXT_KEY_SEQUENCE_MAX) {
-                inputContext->keySequencesLen = 0;
+            if (key_states[SDL_SCANCODE_LCTRL] == true) {
+                char* clipboardText = SDL_GetClipboardText();
+                InputContextBufferInsert(inputContext, clipboardText);
+                SDL_free(clipboardText);
+                bufferModified = true;
             }
-
-            inputContext->keySequences[inputContext->keySequencesLen] = SDLK_V;
-            inputContext->keySequencesLen++;
         }
         }
     } break;
@@ -388,28 +382,7 @@ int InputContextUpdate(InputContext* inputContext, SDL_Event* event) {
     return 0;
 }
 
-int InputContextEnd(InputContext* inputContext) {
-    // Parse the key sequences to look for commands, if any
-    bool commandCompleted = false;
-    switch (inputContext->keySequences[0]) {
-    case SDLK_LCTRL: {
-        switch (inputContext->keySequences[1]) {
-        case SDLK_V: {
-            char* clipboardText = SDL_GetClipboardText();
-            InputContextBufferInsert(inputContext, clipboardText);
-            SDL_free(clipboardText);
-            commandCompleted = true;
-        } break;
-        }
-    } break;
-    }
-
-    if (commandCompleted == true) {
-        SDL_zeroa(inputContext->keySequences);
-        inputContext->keySequencesLen = 0;
-        inputContext->bufferWasModified = true;
-    }
-
+int InputContextRefresh(InputContext* inputContext) {
     // If the layout of the input context changes, the buffer must be re-generated
     if (
         inputContext->layout.x != inputContext->prevLayout.x ||
@@ -452,6 +425,9 @@ int InputContextEnd(InputContext* inputContext) {
             inputContext->cursorY = get_num_newlines(inputContext->gpuText.text->text, inputContext->cursorIndex) * inputContext->cursorHeight;
         }
     }
+
+    inputContext->bufferWasModified = false;
+    inputContext->cursorWasModified = false;
 
     return 0;
 }

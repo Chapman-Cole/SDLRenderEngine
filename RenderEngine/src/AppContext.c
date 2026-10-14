@@ -480,14 +480,17 @@ int AppContextInit(AppContext* app_context, SDL_WindowFlags windowFlags, bool gp
         return -1;
     }
 
-    if (app_context->deviceName == NULL) {
-        SDL_Log("ERROR: No device driver name was specified.\n");
-        return -1;
-    }
-
     SDL_PropertiesID gpuProps = SDL_CreateProperties();
     SDL_SetStringProperty(gpuProps, SDL_PROP_GPU_DEVICE_CREATE_NAME_STRING, (const char*)app_context->deviceName);
     SDL_SetBooleanProperty(gpuProps, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, gpuDebugEnabled);
+
+    if (app_context->deviceName == APP_CONTEXT_DEVICE_DRIVER_AGNOSTIC) {
+        #ifdef _WIN32
+        app_context->deviceName = APP_CONTEXT_DEVICE_DRIVER_VULKAN;
+        #elif defined(__linux__)
+        app_context->deviceName = APP_CONTEXT_DEVICE_DRIVER_VULKAN;
+        #endif
+    }
 
     SDL_GPUVulkanOptions vkOptions = {0};
     if (SDL_strcmp(app_context->deviceName, APP_CONTEXT_DEVICE_DRIVER_VULKAN) == 0) {

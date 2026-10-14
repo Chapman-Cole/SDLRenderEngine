@@ -3,7 +3,7 @@
 #define BUCKET_GROW_AMOUNT 3
 
 // Use FNV-1a hashing function
-Uint32 basic_hash_function(const char* identifier) {
+static Uint32 basic_hash_function(const char* identifier) {
     static const Uint32 FNV_offset_basis = 2166136261;
     static const Uint32 FNV_prime = 16777619;
 

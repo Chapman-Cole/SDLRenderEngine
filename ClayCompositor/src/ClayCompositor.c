@@ -1,28 +1,40 @@
 #include "ClayCompositor.h"
 #include "DrawFunctions.h"
 
-static inline int ClayCompositorAppendTextObject(ClayCompositor* clayCompositor, const char* text, uint32_t textLen, uint16_t fontID, float color[4]) {
-    if (clayCompositor->textObjectsLen + 1 >= clayCompositor->textObjectsCapacity) {
-        clayCompositor->textObjectsCapacity += CLAY_COMPOSITOR_TEXT_OBJECT_ARRAY_GROW_AMOUNT;
-        void* temp_ptr = SDL_realloc(clayCompositor->textObjects, clayCompositor->textObjectsCapacity * sizeof(GPUText));
-        if (temp_ptr == NULL) {
-            SDL_Log("Failed to allocate memory for GPUText objects in clay compositor.\n");
-            return -1;
+static inline GPUText ClayCompositorGetTextObject(ClayCompositor* clayCompositor, const char* text, uint32_t textLen, uint16_t fontID, float color[4]) {
+    for (int i = 0; i < clayCompositor->textObjectCache.len; i++) {
+        if (
+            clayCompositor->textObjectCache.arr[i].textLen == textLen &&
+            SDL_strncmp(clayCompositor->textObjectCache.arr[i].text.text->text, text, textLen * sizeof(char)) == 0
+        ) {
+            clayCompositor->textObjectCache.arr[i].taggedForDeletion = false;
+            TTF_Font* font = FontRegistryGetWithKey(clayCompositor->fontRegistry, fontID);
+            if (font != clayCompositor->textObjectCache.arr[i].text.font) {
+                GPUTextUpdateFont(&clayCompositor->textObjectCache.arr[i].text, font);
+            }
+            return clayCompositor->textObjectCache.arr[i].text;
         }
-        clayCompositor->textObjects = temp_ptr;
     }
 
     TTF_Font* font = FontRegistryGetWithKey(clayCompositor->fontRegistry, fontID);
-    GPUTextCreate(&clayCompositor->textObjects[clayCompositor->textObjectsLen], clayCompositor->appContext, font, text, textLen, color);
-    clayCompositor->textObjectsLen++;
-    return 0;
+    GPUText gpuText;
+    GPUTextCreate(&gpuText, clayCompositor->appContext, font, text, textLen, color);
+
+    GPUTextInfo textInfo = {
+        .text = gpuText,
+        .textLen = textLen,
+        .taggedForDeletion = false, // Newly allocated text objects will persist until the next frame to determine their permanence
+    };
+
+    DYNAMIC_ARRAY_APPEND(clayCompositor->textObjectCache, textInfo);
+
+    return gpuText;
 }
 
 void ClayCompositorRenderCommands(ClayCompositor* clayCompositor, RenderContext* renderContext, Clay_RenderCommandArray* renderCommands) {
-    for (uint32_t i = 0; i < clayCompositor->textObjectsLen; i++) {
-        GPUTextDestroy(&clayCompositor->textObjects[i]);
+    for (int i = 0; i < clayCompositor->textObjectCache.len; i++) {
+        clayCompositor->textObjectCache.arr[i].taggedForDeletion = true;
     }
-    clayCompositor->textObjectsLen = 0;
 
     for (size_t i = 0; i < renderCommands->length; i++) {
         Clay_RenderCommand* command = Clay_RenderCommandArray_Get(renderCommands, i);
@@ -59,9 +71,10 @@ void ClayCompositorRenderCommands(ClayCompositor* clayCompositor, RenderContext*
         case CLAY_RENDER_COMMAND_TYPE_TEXT: {
             Clay_TextRenderData* config = &command->renderData.text;
             float textColor[4] = {config->textColor.r / 255.0f, config->textColor.g / 255.0f, config->textColor.b / 255.0f, config->textColor.a / 255.0f};
-            ClayCompositorAppendTextObject(clayCompositor, config->stringContents.chars, config->stringContents.length, config->fontId, textColor);
-            APP_CONTEXT_FLUSH_TRANSFER_CONTEXT(*clayCompositor->appContext);
-            DrawText(renderContext, &clayCompositor->textObjects[clayCompositor->textObjectsLen - 1], (float[2]){bounding_box.x, bounding_box.y});
+            GPUText gpuText = ClayCompositorGetTextObject(clayCompositor, config->stringContents.chars, config->stringContents.length, config->fontId, textColor);
+            // Must flush appContext's transfer context so that the text data makes it to the gpu in time
+            APP_CONTEXT_FLUSH_TRANSFER_CONTEXT(*renderContext->appContext);
+            DrawText(renderContext, &gpuText, (float[2]){bounding_box.x, bounding_box.y});
         } break;
 
         case CLAY_RENDER_COMMAND_TYPE_CUSTOM: {
@@ -80,6 +93,16 @@ void ClayCompositorRenderCommands(ClayCompositor* clayCompositor, RenderContext*
             } break;
             }
         }
+        }
+    }
+
+    for (int i = 0; i < clayCompositor->textObjectCache.len; i++) {
+        if (clayCompositor->textObjectCache.arr[i].taggedForDeletion == true) {
+            GPUTextDestroy(&clayCompositor->textObjectCache.arr[i].text);
+            DYNAMIC_ARRAY_REMOVE(clayCompositor->textObjectCache, i);
+            // Account for the fact that i will be auto incremented after this, but
+            // removing the current element already places the next element at the current index
+            i--;
         }
     }
 }

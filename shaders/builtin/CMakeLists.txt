@@ -39,32 +39,34 @@ foreach(SHADER IN LISTS BUILTIN_SHADER_SOURCES)
         DEPENDS "${SHADER_DIR_PATH}/${SHADER}"
     )
 
-    set(VERTEX_DXIL_OUTPUT "${SHADER_DIR_PATH}/headers/${SHADER_NAME}_vertex_dxil.h")
+    if(WIN32)
+        set(VERTEX_DXIL_OUTPUT "${SHADER_DIR_PATH}/headers/${SHADER_NAME}_vertex_dxil.h")
 
-    set (FRAGMENT_DXIL_OUTPUT "${SHADER_DIR_PATH}/headers/${SHADER_NAME}_fragment_dxil.h")
+        set (FRAGMENT_DXIL_OUTPUT "${SHADER_DIR_PATH}/headers/${SHADER_NAME}_fragment_dxil.h")
 
-    list(APPEND BUILTIN_SHADER_FILES ${VERTEX_DXIL_OUTPUT})
-    list (APPEND BUILTIN_SHADER_FILES ${FRAGMENT_DXIL_OUTPUT})
+        list(APPEND BUILTIN_SHADER_FILES ${VERTEX_DXIL_OUTPUT})
+        list (APPEND BUILTIN_SHADER_FILES ${FRAGMENT_DXIL_OUTPUT})
 
-    # Generate the dxil vertex shader code
-    add_custom_command(
-        OUTPUT ${VERTEX_DXIL_OUTPUT}
-        COMMAND slangc ${SHADER_DIR_PATH}/${SHADER} -target dxil -profile sm_6_0 -stage vertex -entry vertexMain -o ${SHADER_DIR_PATH}/${SHADER_NAME}.vert.dxil
-        COMMAND xxd -i -n "${SHADER_NAME}_vertex_dxil_source" ${SHADER_DIR_PATH}/${SHADER_NAME}.vert.dxil > ${VERTEX_DXIL_OUTPUT}
-        COMMAND ${CMAKE_COMMAND} -E rm -f ${SHADER_DIR_PATH}/${SHADER_NAME}.vert.dxil # clean up generated dxil file
-        COMMENT "Generating DXIL Header: ${SHADER} -> ${SHADER_NAME}_vertex_dxil.h"
-        DEPENDS "${SHADER_DIR_PATH}/${SHADER}"
-    )
+        # Generate the dxil vertex shader code
+        add_custom_command(
+            OUTPUT ${VERTEX_DXIL_OUTPUT}
+            COMMAND slangc ${SHADER_DIR_PATH}/${SHADER} -target dxil -profile sm_6_0 -stage vertex -entry vertexMain -o ${SHADER_DIR_PATH}/${SHADER_NAME}.vert.dxil
+            COMMAND xxd -i -n "${SHADER_NAME}_vertex_dxil_source" ${SHADER_DIR_PATH}/${SHADER_NAME}.vert.dxil > ${VERTEX_DXIL_OUTPUT}
+            COMMAND ${CMAKE_COMMAND} -E rm -f ${SHADER_DIR_PATH}/${SHADER_NAME}.vert.dxil # clean up generated dxil file
+            COMMENT "Generating DXIL Header: ${SHADER} -> ${SHADER_NAME}_vertex_dxil.h"
+            DEPENDS "${SHADER_DIR_PATH}/${SHADER}"
+        )
 
-    # Generate the dxil fragment shader code
-    add_custom_command(
-        OUTPUT ${FRAGMENT_DXIL_OUTPUT}
-        COMMAND slangc ${SHADER_DIR_PATH}/${SHADER} -target dxil -profile sm_6_0 -stage fragment -entry fragmentMain -o ${SHADER_DIR_PATH}/${SHADER_NAME}.frag.dxil
-        COMMAND xxd -i -n "${SHADER_NAME}_fragment_dxil_source" ${SHADER_DIR_PATH}/${SHADER_NAME}.frag.dxil > ${FRAGMENT_DXIL_OUTPUT}
-        COMMAND ${CMAKE_COMMAND} -E rm -f ${SHADER_DIR_PATH}/${SHADER_NAME}.frag.dxil # clean up generated dxil file
-        COMMENT "Generating DXIL Header: ${SHADER} -> ${SHADER_NAME}_fragment_dxil.h"
-        DEPENDS "${SHADER_DIR_PATH}/${SHADER}"
-    )
+        # Generate the dxil fragment shader code
+        add_custom_command(
+            OUTPUT ${FRAGMENT_DXIL_OUTPUT}
+            COMMAND slangc ${SHADER_DIR_PATH}/${SHADER} -target dxil -profile sm_6_0 -stage fragment -entry fragmentMain -o ${SHADER_DIR_PATH}/${SHADER_NAME}.frag.dxil
+            COMMAND xxd -i -n "${SHADER_NAME}_fragment_dxil_source" ${SHADER_DIR_PATH}/${SHADER_NAME}.frag.dxil > ${FRAGMENT_DXIL_OUTPUT}
+            COMMAND ${CMAKE_COMMAND} -E rm -f ${SHADER_DIR_PATH}/${SHADER_NAME}.frag.dxil # clean up generated dxil file
+            COMMENT "Generating DXIL Header: ${SHADER} -> ${SHADER_NAME}_fragment_dxil.h"
+            DEPENDS "${SHADER_DIR_PATH}/${SHADER}"
+        )
+    endif()
 endforeach()
 
 add_custom_target(BuiltinShaders ALL DEPENDS ${BUILTIN_SHADER_FILES})

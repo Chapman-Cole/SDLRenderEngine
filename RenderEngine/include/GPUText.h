@@ -44,4 +44,6 @@ int GPUTextDestroy(GPUText* renderText);
 // length can be 0 for null terminated strings
 int GPUTextUpdate(GPUText* renderText, const char* text, uint32_t length);
 
+int GPUTextUpdateFont(GPUText* renderText, TTF_Font* font);
+
 #endif

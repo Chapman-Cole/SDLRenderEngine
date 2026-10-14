@@ -58,7 +58,7 @@ ClayCompositor clayCompositor;
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     appContext.windowName = "ClayTest";
-    appContext.deviceName = APP_CONTEXT_DEVICE_DRIVER_VULKAN;
+    appContext.deviceName = APP_CONTEXT_DEVICE_DRIVER_AGNOSTIC;
     AppContextInit(&appContext, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY, false, 1'000'00);
     SDL_SetGPUSwapchainParameters(appContext.device, appContext.window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_IMMEDIATE);
 
@@ -83,6 +83,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 
 SDL_AppResult SDL_AppIterate(void* appstate) {
     AppContextUpdate(&appContext);
+    InputContextRefresh(&inputContext);
 
     RenderContext renderContext = {0};
     renderContext.texture = NULL;
@@ -153,9 +154,7 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
         return SDL_APP_SUCCESS;
     }
 
-    InputContextBegin(&inputContext);
-    InputContextUpdate(&inputContext, event);
-    InputContextEnd(&inputContext);
+    InputContextProcessEvent(&inputContext, event);
 
     return SDL_APP_CONTINUE;
 }
