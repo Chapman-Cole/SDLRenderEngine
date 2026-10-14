@@ -18,7 +18,7 @@ struct VertexUniformData {
     float2 pad;
 };
 
-[[vk::binding(0,1)]] // SDL3 requires vertex uniform data to be in set 1
+[[vk::binding(0, 1)]] // SDL3 requires vertex uniform data to be in set 1
 ConstantBuffer<VertexUniformData> vertexUniform : register(b0, space1);
 
 [shader("vertex")]
@@ -65,7 +65,7 @@ struct FragmentUniformData {
     float4 cornerRadii;
 };
 
-[[vk::binding(0,3)]] // SDL3 requires fragment uniform data to be in set 3
+[[vk::binding(0, 3)]] // SDL3 requires fragment uniform data to be in set 3
 ConstantBuffer<FragmentUniformData> fragmentUniform : register(b0, space3);
 
 [shader("fragment")]
@@ -85,10 +85,13 @@ FragmentStageOutput fragmentMain(VertexToFragment fragPos) : SV_Target {
         float radius = fragmentUniform.cornerRadii.x;
 
         float adjustedX = -adjustedPos.x - adjustedBounds.x + radius;
-        float root = sqrt(radius * radius - adjustedX * adjustedX);
 
-        if (adjustedPos.x < radius - adjustedBounds.x && adjustedPos.y > adjustedBounds.y - radius + root) {
-            discard;
+        if (adjustedPos.x < radius - adjustedBounds.x) {
+            float root = sqrt(radius * radius - adjustedX * adjustedX);
+
+            if (adjustedPos.y > adjustedBounds.y - radius + root) {
+                discard;
+            }
         }
     }
 
@@ -97,10 +100,13 @@ FragmentStageOutput fragmentMain(VertexToFragment fragPos) : SV_Target {
         float radius = fragmentUniform.cornerRadii.y;
 
         float adjustedX = adjustedPos.x - adjustedBounds.x + radius;
-        float root = sqrt(radius * radius - adjustedX * adjustedX);
 
-        if (adjustedPos.x > adjustedBounds.x - radius && adjustedPos.y > adjustedBounds.y - radius + root) {
-            discard;
+        if (adjustedPos.x > adjustedBounds.x - radius) {
+            float root = sqrt(radius * radius - adjustedX * adjustedX);
+
+            if (adjustedPos.y > adjustedBounds.y - radius + root) {
+                discard;
+            }
         }
     }
 
@@ -109,10 +115,13 @@ FragmentStageOutput fragmentMain(VertexToFragment fragPos) : SV_Target {
         float radius = fragmentUniform.cornerRadii.z;
 
         float adjustedX = -adjustedPos.x - adjustedBounds.x + radius;
-        float root = sqrt(radius * radius - adjustedX * adjustedX);
 
-        if (adjustedPos.x < radius - adjustedBounds.x && adjustedPos.y < -adjustedBounds.y + radius - root) {
-            discard;
+        if (adjustedPos.x < radius - adjustedBounds.x) {
+            float root = sqrt(radius * radius - adjustedX * adjustedX);
+
+            if (adjustedPos.y < -adjustedBounds.y + radius - root) {
+                discard;
+            }
         }
     }
 
@@ -121,10 +130,13 @@ FragmentStageOutput fragmentMain(VertexToFragment fragPos) : SV_Target {
         float radius = fragmentUniform.cornerRadii.w;
 
         float adjustedX = adjustedPos.x - adjustedBounds.x + radius;
-        float root = sqrt(radius * radius - adjustedX * adjustedX);
 
-        if (adjustedPos.x > adjustedBounds.x - radius && adjustedPos.y < -adjustedBounds.y + radius - root) {
-            discard;
+        if (adjustedPos.x > adjustedBounds.x - radius) {
+            float root = sqrt(radius * radius - adjustedX * adjustedX);
+
+            if (adjustedPos.y < -adjustedBounds.y + radius - root) {
+                discard;
+            }
         }
     }
 

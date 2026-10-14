@@ -9,9 +9,17 @@ static inline GPUText ClayCompositorGetTextObject(ClayCompositor* clayCompositor
         ) {
             clayCompositor->textObjectCache.arr[i].taggedForDeletion = false;
             TTF_Font* font = FontRegistryGetWithKey(clayCompositor->fontRegistry, fontID);
+
+
             if (font != clayCompositor->textObjectCache.arr[i].text.font) {
                 GPUTextUpdateFont(&clayCompositor->textObjectCache.arr[i].text, font);
             }
+
+            clayCompositor->textObjectCache.arr[i].text.color[0] = color[0];
+            clayCompositor->textObjectCache.arr[i].text.color[1] = color[1];
+            clayCompositor->textObjectCache.arr[i].text.color[2] = color[2];
+            clayCompositor->textObjectCache.arr[i].text.color[3] = color[3];
+
             return clayCompositor->textObjectCache.arr[i].text;
         }
     }
