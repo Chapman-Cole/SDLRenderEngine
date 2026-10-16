@@ -85,6 +85,11 @@ int GPUTransferContextSubmit(GPUTransferContext* transferContext) {
         transferBuffer);
 
     SDL_GPUCommandBuffer* cmdbuf = SDL_AcquireGPUCommandBuffer(transferContext->device);
+    if (cmdbuf == NULL) {
+        SDL_Log("Failed to acquire command buffer transfer context upload: %s", SDL_GetError());
+        return -1;
+    }
+
     SDL_GPUCopyPass* copypass = SDL_BeginGPUCopyPass(cmdbuf);
 
     for (Uint32 i = 0; i < transferContext->contextInfo.len; i++) {
@@ -98,7 +103,7 @@ int GPUTransferContextSubmit(GPUTransferContext* transferContext) {
                 .offset = currInfo.tbOffset,
             },
             &(SDL_GPUBufferRegion){
-                .buffer = currInfo.gpuBuffer,
+                .buffer = currInfo.gpuBuffer->buffer,
                 .offset = 0,
                 .size = currInfo.dataSize,
             },
@@ -113,13 +118,17 @@ int GPUTransferContextSubmit(GPUTransferContext* transferContext) {
         transferContext->transferBuffers.arr[i].amountFilled = 0;
     }
 
+    for (int i = 0; i < transferContext->contextInfo.len; i++) {
+        GPUBuffer_unref(transferContext->device, transferContext->contextInfo.arr[i].gpuBuffer);
+    }
+
     DYNAMIC_ARRAY_CLEAR(transferContext->contextInfo);
     MemoryArena_clear(&transferContext->dataStagingArena);
 
     return 0;
 }
 
-int GPUTransferContextUpload(GPUTransferContext* transferContext, SDL_GPUBuffer* gpuBuffer, void* data, Uint32 data_size) {
+int GPUTransferContextUpload(GPUTransferContext* transferContext, GPUBuffer* gpuBuffer, void* data, Uint32 data_size) {
     TransferContextInfo transferContextInfo = {0};
 
     for (int i = 0; i < transferContext->transferBuffers.len; i++) {
@@ -162,6 +171,7 @@ int GPUTransferContextUpload(GPUTransferContext* transferContext, SDL_GPUBuffer*
         }
     }
 
+    GPUBUFFER_ACQUIRE_REFERENCE(gpuBuffer);
     transferContextInfo.gpuBuffer = gpuBuffer;
 
     // This is done to ensure the data persists in memory by upload time, as the provided data pointer

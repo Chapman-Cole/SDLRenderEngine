@@ -155,7 +155,7 @@ void DrawText(RenderContext* renderContext, GPUText* text, float position[2]) {
             renderContext->renderPass,
             0,
             (SDL_GPUBufferBinding[]){{
-                .buffer = text->atlasses[i].vertexBuffer,
+                .buffer = text->atlasses[i].vertexBuffer->buffer,
                 .offset = 0,
             }},
             1);
@@ -163,7 +163,7 @@ void DrawText(RenderContext* renderContext, GPUText* text, float position[2]) {
         SDL_BindGPUIndexBuffer(
             renderContext->renderPass,
             &(SDL_GPUBufferBinding){
-                .buffer = text->atlasses[i].indexBuffer,
+                .buffer = text->atlasses[i].indexBuffer->buffer,
                 .offset = 0},
             SDL_GPU_INDEXELEMENTSIZE_32BIT);
 

@@ -55,35 +55,17 @@ static inline int generateGPUBuffers(GPUText* renderText, AppContext* appContext
         textSequence.numIndices = sequence->num_indices;
         textSequence.atlas = sequence->atlas_texture;
 
-        textSequence.vertexBuffer = SDL_CreateGPUBuffer(
-            appContext->device,
-            &(SDL_GPUBufferCreateInfo){
-                .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-                .size = sequence->num_vertices * sizeof(TextVertex),
-                .props = 0,
-            });
+        textSequence.vertexBuffer = GPUBuffer_create(appContext->device, &(SDL_GPUBufferCreateInfo){
+            .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+            .size = sequence->num_vertices * sizeof(TextVertex),
+            .props = 0,
+        });
 
-        if (textSequence.vertexBuffer == NULL) {
-            SDL_Log("Failed to create a vertex buffer for text object: %s", SDL_GetError());
-            SDL_free(vertices);
-            SDL_free(indices);
-            return -1;
-        }
-
-        textSequence.indexBuffer = SDL_CreateGPUBuffer(
-            appContext->device,
-            &(SDL_GPUBufferCreateInfo){
-                .usage = SDL_GPU_BUFFERUSAGE_INDEX,
-                .size = sequence->num_indices * sizeof(int),
-                .props = 0,
-            });
-
-        if (textSequence.indexBuffer == NULL) {
-            SDL_Log("Failed to create index buffer for text object: %s", SDL_GetError());
-            SDL_free(vertices);
-            SDL_free(indices);
-            return -1;
-        }
+        textSequence.indexBuffer = GPUBuffer_create(appContext->device, &(SDL_GPUBufferCreateInfo){
+            .usage = SDL_GPU_BUFFERUSAGE_INDEX,
+            .size = sequence->num_indices * sizeof(int),
+            .props = 0,
+        });
 
         GPUTransferContextUpload(&appContext->transferContext, textSequence.vertexBuffer, vertices, sequence->num_vertices * sizeof(TextVertex));
         GPUTransferContextUpload(&appContext->transferContext, textSequence.indexBuffer, indices, sequence->num_indices * sizeof(int));
@@ -133,8 +115,8 @@ int GPUTextCreate(GPUText* renderText, AppContext* appContext, TTF_Font* font, c
 
 int GPUTextDestroy(GPUText* renderText) {
     for (Uint32 i = 0; i < renderText->numAtlasses; i++) {
-        SDL_ReleaseGPUBuffer(renderText->appContext->device, renderText->atlasses[i].vertexBuffer);
-        SDL_ReleaseGPUBuffer(renderText->appContext->device, renderText->atlasses[i].indexBuffer);
+        GPUBuffer_unref(renderText->appContext->device, renderText->atlasses[i].vertexBuffer);
+        GPUBuffer_unref(renderText->appContext->device, renderText->atlasses[i].indexBuffer);
     }
     SDL_free(renderText->atlasses);
     TTF_DestroyText(renderText->text);
@@ -143,8 +125,8 @@ int GPUTextDestroy(GPUText* renderText) {
 
 int GPUTextUpdate(GPUText* renderText, const char* text, uint32_t length) {
     for (Uint32 i = 0; i < renderText->numAtlasses; i++) {
-        SDL_ReleaseGPUBuffer(renderText->appContext->device, renderText->atlasses[i].vertexBuffer);
-        SDL_ReleaseGPUBuffer(renderText->appContext->device, renderText->atlasses[i].indexBuffer);
+        GPUBuffer_unref(renderText->appContext->device, renderText->atlasses[i].vertexBuffer);
+        GPUBuffer_unref(renderText->appContext->device, renderText->atlasses[i].indexBuffer);
     }
     SDL_free(renderText->atlasses);
 

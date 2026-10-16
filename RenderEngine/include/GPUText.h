@@ -2,11 +2,12 @@
 #define GPUTEXT_H
 
 #include "AppContext.h"
+#include "GPUBufferContext.h"
 
 typedef struct TextSequence {
     SDL_GPUTexture* atlas;
-    SDL_GPUBuffer* vertexBuffer;
-    SDL_GPUBuffer* indexBuffer;
+    GPUBuffer* vertexBuffer;
+    GPUBuffer* indexBuffer;
     Uint32 numIndices;
 } TextSequence;
 

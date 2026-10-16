@@ -3,9 +3,10 @@
 
 #include "MemoryArena.h"
 #include "SDL3/SDL.h"
+#include "GPUBufferContext.h"
 
 typedef struct TransferContextInfo {
-    SDL_GPUBuffer* gpuBuffer;
+    GPUBuffer* gpuBuffer;
     void* data;
     Uint32 dataSize;
     Uint32 tbIndex;
@@ -46,6 +47,6 @@ int GPUTransferContextDestroy(GPUTransferContext* transferContext);
 int GPUTransferContextSubmit(GPUTransferContext* transferContext);
 
 // data_size should be the total size in bytes
-int GPUTransferContextUpload(GPUTransferContext* transferContext, SDL_GPUBuffer* gpuBuffer, void* data, Uint32 data_size);
+int GPUTransferContextUpload(GPUTransferContext* transferContext, GPUBuffer* gpuBuffer, void* data, Uint32 data_size);
 
 #endif
