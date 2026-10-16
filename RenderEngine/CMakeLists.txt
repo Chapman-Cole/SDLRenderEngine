@@ -25,19 +25,11 @@ find_package(SDL3 REQUIRED)
 find_package(Vulkan REQUIRED)
 
 # Find SDL_ttf on system path
-find_path(sdl_ttf_header_path NAMES SDL3_ttf)
-if(NOT DEFINED sdl_ttf_header_path)
-    message(FATAL_ERROR "Could not find SDL3_ttf headers on system path.")
-endif()
+find_package(SDL3_ttf REQUIRED)
 
-find_library(sdl_ttf_library_path NAMES SDL3_ttf)
-if (NOT DEFINED sdl_ttf_library_path)
-    message(FATAL_ERROR "Could not find SDL3_ttf library path.")
-endif()
+target_include_directories(RenderEngine PUBLIC SDL3_ttf::SDL3_ttf "include/" ${CMAKE_SOURCE_DIR})
 
-target_include_directories(RenderEngine PUBLIC ${sdl_ttf_header_path} "include/" ${CMAKE_SOURCE_DIR})
-
-target_link_libraries(RenderEngine PUBLIC SDL3::SDL3 ${sdl_ttf_library_path} PRIVATE Vulkan::Vulkan)
+target_link_libraries(RenderEngine PUBLIC SDL3::SDL3 SDL3_ttf::SDL3_ttf PRIVATE Vulkan::Vulkan)
 
 add_dependencies(RenderEngine BuiltinShaders CompiledShaders)
 
