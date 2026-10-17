@@ -22,8 +22,6 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     AppContextInit(&appContext, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY, false, 1'000'000);
     SDL_SetGPUSwapchainParameters(appContext.device, appContext.window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_IMMEDIATE);
 
-    SDL_Log("%d", SDL_GetVersion());
-
     FontRegistryCreate(&fontRegistry, &appContext);
     FontRegistrySet(&fontRegistry, "Hack-Regular15", font_path, 15.0f);
 

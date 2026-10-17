@@ -23,21 +23,25 @@ ConstantBuffer<VertexUniformData> vertexUniform : register(b0, space1);
 
 [shader("vertex")]
 VertexToFragment vertexMain(VertexStageInput vertexInput) {
+    // Since the rectangles are drawn from top left down, make the top left corner of the triangle (0,0)
+    // so that the y doesn't have to have a negative scale that would screw up the counter-clockwise
+    // winding of the rectangle and cause it to not render when backface culling is enabled (the default chosen
+    // for the engine is CCW faces as front)
     static float2 positions[6] = {
         float2(0.0, 0.0),
+        float2(0.0, -1.0),
         float2(1.0, 0.0),
-        float2(0.0, 1.0),
 
         float2(1.0, 0.0),
-        float2(1.0, 1.0),
-        float2(0.0, 1.0)
+        float2(0.0, -1.0),
+        float2(1.0, -1.0)
     };
 
     VertexToFragment output;
 
     float2 tempVec = positions[vertexInput.vertexID];
     tempVec.x *= vertexUniform.size.x;
-    tempVec.y *= -vertexUniform.size.y;
+    tempVec.y *= vertexUniform.size.y;
     output.pos = tempVec;
 
     tempVec.x += vertexUniform.position.x;

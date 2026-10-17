@@ -121,7 +121,7 @@ static inline int InputContextBufferInsert(InputContext* inputContext, const cha
     int textLen = SDL_strlen(text);
 
     if (inputContext->bufferLen + textLen >= inputContext->bufferCapacity) {
-        inputContext->bufferCapacity += INPUT_CONTEXT_BASE_BUFFER_SIZE;
+        inputContext->bufferCapacity += SDL_max(INPUT_CONTEXT_BASE_BUFFER_SIZE, textLen);
         void* temp_ptr = SDL_realloc(inputContext->buffer, inputContext->bufferCapacity);
         if (temp_ptr == NULL) {
             SDL_Log("Failed to re-allocate memory for InputContext buffer: %s", SDL_GetError());

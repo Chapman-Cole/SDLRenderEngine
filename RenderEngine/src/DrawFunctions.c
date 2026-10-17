@@ -92,8 +92,15 @@ void DrawCircle(RenderContext* renderContext, float center[2], float radius, flo
     SDL_PushGPUVertexUniformData(
         renderContext->cmdbuf,
         0,
-        (float[16]){center[0], center[1], radius, renderContext->aspectRatio},
-        16);
+        (float[32]){
+            center[0],
+            center[1],
+            renderContext->renderWidth,
+            renderContext->renderHeight,
+            radius,
+            renderContext->aspectRatio,
+        },
+        32);
 
     SDL_PushGPUFragmentUniformData(
         renderContext->cmdbuf,

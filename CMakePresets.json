@@ -33,6 +33,34 @@
         "CMAKE_BUILD_TYPE": "Release"
       },
       "binaryDir": "${sourceDir}/build/release"
+    },
+    {
+      "name": "linux-release",
+      "displayName": "Linux x64 Release",
+      "description": "Builds x64 release version of project",
+      "generator": "Unix Makefiles",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      },
+      "binaryDir": "${sourceDir}/build/release"
+    },
+    {
+      "name": "linux-debug",
+      "displayName": "Linux x64 Debug",
+      "description": "Builds x64 debug version of project",
+      "generator": "Unix Makefiles",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      },
+      "binaryDir": "${sourceDir}/build/debug"
     }
   ],
   "buildPresets": [
@@ -43,6 +71,14 @@
     {
       "name": "windows-release",
       "configurePreset": "windows-release"
+    },
+    {
+      "name": "linux-release",
+      "configurePreset": "linux-release"
+    },
+    {
+      "name": "linux-debug",
+      "configurePreset": "linux-debug"
     }
   ]
 }

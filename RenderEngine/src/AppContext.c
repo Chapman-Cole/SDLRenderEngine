@@ -31,6 +31,13 @@ static SDL_GPUColorTargetBlendState DefaultBlendState = {
     .enable_color_write_mask = 0,
 };
 
+static SDL_GPURasterizerState DefaultRasterizerState = {
+    .cull_mode = SDL_GPU_CULLMODE_BACK,
+    .front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE,
+    .enable_depth_bias = false,
+    .enable_depth_clip = false,
+};
+
 static inline int AppContextLoadRectanglePipeline(AppContext* app_context) {
     size_t vertex_shader_source_len = 0;
     size_t fragment_shader_source_len = 0;
@@ -115,6 +122,7 @@ static inline int AppContextLoadRectanglePipeline(AppContext* app_context) {
                 .num_vertex_attributes = 0,
                 .vertex_attributes = NULL,
             },
+            .rasterizer_state = DefaultRasterizerState,
             .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
             .vertex_shader = rectangleVertexShader,
             .fragment_shader = rectangleFragmentShader,
@@ -215,6 +223,7 @@ static inline int AppContextLoadCirclePipeline(AppContext* app_context) {
                 .num_vertex_attributes = 0,
                 .vertex_attributes = NULL,
             },
+            .rasterizer_state = DefaultRasterizerState,
             .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
             .vertex_shader = circleVertexShader,
             .fragment_shader = circleFragmentShader,
@@ -337,6 +346,7 @@ static inline int AppContextLoadTextPipeline(AppContext* app_context) {
                     },
                 },
             },
+            .rasterizer_state = DefaultRasterizerState,
             .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
             .vertex_shader = textVertexShader,
             .fragment_shader = textFragmentShader,
@@ -433,31 +443,12 @@ static inline int AppContextLoadTextCursorPipeline(AppContext* app_context) {
                 }},
             },
             .vertex_input_state = (SDL_GPUVertexInputState){
-                .num_vertex_buffers = 1,
-                .vertex_buffer_descriptions = (SDL_GPUVertexBufferDescription[]){
-                    {
-                        .slot = 0,
-                        .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
-                        .instance_step_rate = 0,
-                        .pitch = 2 * sizeof(SDL_FPoint),
-                    },
-                },
-                .num_vertex_attributes = 2,
-                .vertex_attributes = (SDL_GPUVertexAttribute[]){
-                    {
-                        .buffer_slot = 0,
-                        .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
-                        .location = 0,
-                        .offset = 0,
-                    },
-                    {
-                        .buffer_slot = 0,
-                        .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
-                        .location = 1,
-                        .offset = 2 * sizeof(float),
-                    },
-                },
+                .num_vertex_attributes = 0,
+                .vertex_attributes = NULL,
+                .num_vertex_buffers = 0,
+                .vertex_buffer_descriptions = NULL
             },
+            .rasterizer_state = DefaultRasterizerState,
             .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
             .vertex_shader = textCursorVertexShader,
             .fragment_shader = textCursorFragmentShader,
@@ -544,6 +535,7 @@ int AppContextInit(AppContext* app_context, SDL_WindowFlags windowFlags, bool gp
         SDL_Log("Failed to create gpu text engine: %s", SDL_GetError());
         return -1;
     }
+    TTF_SetGPUTextEngineWinding(app_context->textEngine, TTF_GPU_TEXTENGINE_WINDING_COUNTER_CLOCKWISE);
 
     app_context->textSampler = SDL_CreateGPUSampler(
         app_context->device,

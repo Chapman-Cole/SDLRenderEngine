@@ -132,6 +132,15 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 
                 CLAY_TEXT(((Clay_String){.chars = buff3, .length = buff3_len, .isStaticallyAllocated = false}), {.fontSize = 12, .fontId = HackRegular12, .textColor = {255, 255, 255, 255}});
             }
+
+            CLAY(CLAY_ID("SideBarElement4"), sidebarItemConfig) {
+                static char buff4[200] = {0};
+                static int buff4_len = 0;
+
+                buff4_len = SDL_snprintf(buff4, 200, "(%d,%d)", (int)(renderContext.renderWidth), (int)(renderContext.renderHeight));
+
+                CLAY_TEXT(((Clay_String){.chars = buff4, .length = buff4_len, .isStaticallyAllocated = false}), {.fontSize = 12, .fontId = HackRegular12, .textColor = {255, 255, 255, 255}});
+            }
         }
 
         CLAY(CLAY_ID("MainContent"), {.layout = {.sizing = {.width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16)}, .cornerRadius = {12.0, 12.0, 12.0, 12.0}, .backgroundColor = {25, 25, 25, 255}}) {

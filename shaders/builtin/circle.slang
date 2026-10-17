@@ -3,8 +3,8 @@ struct VertexStageInput {
 };
 
 struct VertexToFragment {
-    float3 pos : float3;
     float4 sv_position : SV_Position;
+    float2 pos : float2;
 };
 
 struct FragmentStageOutput {
@@ -13,8 +13,10 @@ struct FragmentStageOutput {
 
 struct VertexUniformData {
     float2 center;
+    float2 windowDims;
     float radius;
     float aspectRatio;
+    float2 pad;
 };
 
 [[vk::binding(0, 1)]] // SDL3 requires vertex data to be in set 1
@@ -28,16 +30,29 @@ VertexToFragment vertexMain(VertexStageInput vertexInput) {
         float2(-1.0, 1.0),
 
         float2(1.0, -1.0),
-        float2(-1.0, 1.0),
-        float2(1.0, 1.0)
+        float2(1.0, 1.0),
+        float2(-1.0, 1.0)
     };
 
     VertexToFragment output;
+    output.pos = positions[vertexInput.vertexID];
 
     float2 tempVec = vertexUniform.radius * positions[vertexInput.vertexID];
-    output.pos = float3(tempVec.x * vertexUniform.aspectRatio, tempVec.y, 0.0);
-    output.pos.xy += vertexUniform.center;
-    output.sv_position = float4(output.pos, 1.0);
+    tempVec.x += vertexUniform.center.x;
+    tempVec.y -= vertexUniform.center.y;
+
+    float pixelScaleX = (1.0 - (-1.0)) / vertexUniform.windowDims.x;
+    float pixelScaleY = (1.0 - (-1.0)) / vertexUniform.windowDims.y;
+
+    tempVec.x *= pixelScaleX;
+    tempVec.y *= pixelScaleY;
+
+    // Translates to upper left corner
+    tempVec.x -= 1;
+    tempVec.y += 1;
+
+    output.sv_position = float4(tempVec, 0.0, 1.0);
+
     return output;
 }
 
@@ -53,9 +68,7 @@ ConstantBuffer<FragmentUniformData> fragmentUniform : register(b0, space3);
 
 [shader("fragment")]
 FragmentStageOutput fragmentMain(VertexToFragment fragPos) : SV_Target {
-    float2 newPos = fragPos.pos.xy - fragmentUniform.center;
-    newPos.x *= 1.0 / fragmentUniform.aspectRatio;
-    if (distance(newPos, float2(0, 0)) > fragmentUniform.radius) {
+    if (fragPos.pos.x * fragPos.pos.x + fragPos.pos.y * fragPos.pos.y > 1.0) {
         discard;
     }
 

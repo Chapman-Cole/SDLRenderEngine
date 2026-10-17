@@ -22,14 +22,15 @@ ConstantBuffer<VertexUniformData> vertexUniform : register(b0, space1);
 
 [shader("vertex")]
 VertexToFragment vertexMain(VertexStageInput vertexInput) {
+    // If wondering why rectangle has (0,0) as top left corner, see spiel in rectangle.slang
     static float2 positions[6] = {
         float2(0.0, 0.0),
+        float2(0.0, -1.0),
         float2(1.0, 0.0),
-        float2(0.0, 1.0),
 
         float2(1.0, 0.0),
-        float2(1.0, 1.0),
-        float2(0.0, 1.0)
+        float2(0.0, -1.0),
+        float2(1.0, -1.0)
     };
 
     VertexToFragment output;
@@ -37,7 +38,7 @@ VertexToFragment vertexMain(VertexStageInput vertexInput) {
     float2 tempVec = positions[vertexInput.vertexID];
 
     tempVec.x *= vertexUniform.size.x;
-    tempVec.y *= -vertexUniform.size.y;
+    tempVec.y *= vertexUniform.size.y;
 
     tempVec.x += vertexUniform.position.x;
     tempVec.y -= vertexUniform.position.y;
