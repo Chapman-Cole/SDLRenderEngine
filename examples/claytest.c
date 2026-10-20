@@ -64,7 +64,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     FontRegistrySet(&fontRegistry, "Hack-Regular12", font_path, 12.0f);
     HackRegular12 = FontRegistryGenKey(&fontRegistry, "Hack-Regular12");
 
-    InputContextCreate(&inputContext, &appContext, FontRegistryGetWithKey(&fontRegistry, HackRegular12), (float[4]){1.0, 1.0, 1.0, 1.0}, (float[4]){1.0, 1.0, 1.0, 1.0}, (InputContextLayout){.x = 0, .y = 0, .width = 100.0f, .height = 100.0f});
+    //InputContextCreate(&inputContext, &appContext, FontRegistryGetWithKey(&fontRegistry, HackRegular12), (float[4]){1.0, 1.0, 1.0, 1.0}, (float[4]){1.0, 1.0, 1.0, 1.0}, (InputContextLayout){.x = 0, .y = 0, .width = 100.0f, .height = 100.0f});
 
     ClayCompositorCreate(&clayCompositor, &appContext, &fontRegistry);
 
@@ -81,7 +81,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 
 SDL_AppResult SDL_AppIterate(void* appstate) {
     AppContextUpdate(&appContext);
-    InputContextRefresh(&inputContext);
+    //InputContextRefresh(&inputContext);
 
     RenderContext renderContext = {0};
     renderContext.texture = NULL;
@@ -104,13 +104,13 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
                 CLAY_TEXT(((Clay_String){.chars = buff1, .length = buffLen, .isStaticallyAllocated = false}), {.fontSize = 12, .fontId = HackRegular12, .textColor = {255, 255, 255, 255}});
             }
 
-            CLAY(CLAY_ID("SideBarElement2"), sidebarItemConfig) {
-                static char buff2[200];
-                int textWidth, textHeight;
-                TTF_GetStringSize(FontRegistryGetWithKey(&fontRegistry, HackRegular12), inputContext.gpuText.text->text, 0, &textWidth, &textHeight);
-                int buffLen = SDL_snprintf(buff2, 200, "(%d,%d)", textWidth, textHeight);
-                CLAY_TEXT(((Clay_String){.chars = buff2, .length = buffLen, .isStaticallyAllocated = false}), {.fontSize = 12, .fontId = HackRegular12, .textColor = {255, 255, 255, 255}});
-            }
+            //CLAY(CLAY_ID("SideBarElement2"), sidebarItemConfig) {
+            //    static char buff2[200];
+            //    int textWidth, textHeight;
+            //    TTF_GetStringSize(FontRegistryGetWithKey(&fontRegistry, HackRegular12), inputContext.gpuText.text->text, 0, &textWidth, &textHeight);
+            //    int buffLen = SDL_snprintf(buff2, 200, "(%d,%d)", textWidth, textHeight);
+            //    CLAY_TEXT(((Clay_String){.chars = buff2, .length = buffLen, .isStaticallyAllocated = false}), {.fontSize = 12, .fontId = HackRegular12, .textColor = {255, 255, 255, 255}});
+            //}
 
             CLAY(CLAY_ID("SideBarElement3"), sidebarItemConfig) {
                 static char buff3[200] = {0};
@@ -144,7 +144,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
         }
 
         CLAY(CLAY_ID("MainContent"), {.layout = {.sizing = {.width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16)}, .cornerRadius = {12.0, 12.0, 12.0, 12.0}, .backgroundColor = {25, 25, 25, 255}}) {
-            CLAY(CLAY_ID("InputArea"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}}, .custom = {.customData = &inputContextData}});
+            //CLAY(CLAY_ID("InputArea"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}}, .custom = {.customData = &inputContextData}});
         }
     }
 
@@ -161,7 +161,7 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
         return SDL_APP_SUCCESS;
     }
 
-    InputContextProcessEvent(&inputContext, event);
+    //InputContextProcessEvent(&inputContext, event);
 
     return SDL_APP_CONTINUE;
 }
@@ -173,7 +173,7 @@ void SDL_AppQuit(void* appstate, SDL_AppResult result) {
 
     FontRegistryDestroy(&fontRegistry);
 
-    InputContextDestroy(&inputContext);
+    //InputContextDestroy(&inputContext);
 
     AppContextTerminate(&appContext);
 }

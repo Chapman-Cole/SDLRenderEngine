@@ -187,6 +187,7 @@ void DrawText(RenderContext* renderContext, GPUText* text, float position[2]) {
     }
 }
 
+/*
 void DrawInputContext(RenderContext* renderContext, InputContext* inputContext) {
     DrawText(renderContext, &inputContext->gpuText, (float[2]){inputContext->layout.x, inputContext->layout.y});
 
@@ -224,3 +225,5 @@ void DrawInputContext(RenderContext* renderContext, InputContext* inputContext) 
 
     SDL_DrawGPUPrimitives(renderContext->renderPass, 6, 1, 0, 0);
 }
+
+*/

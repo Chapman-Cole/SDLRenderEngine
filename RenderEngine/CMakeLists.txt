@@ -13,6 +13,7 @@ add_library(RenderEngine STATIC
 if (ENABLE_ASAN)
     if(WIN32)
         target_compile_options(RenderEngine PRIVATE /fsanitize=address)
+        target_link_options(RenderEngine PRIVATE /INCREMENTAL:NO)
     elseif(UNIX)
         target_compile_options(RenderEngine PRIVATE -fsanitize=address -fno-omit-frame-pointer -g)
         target_link_options(RenderEngine PRIVATE -fsanitize=address)

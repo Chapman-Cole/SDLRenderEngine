@@ -16,7 +16,8 @@
         "strategy": "external"
       },
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ENABLE_ASAN": "OFF"
       },
       "binaryDir": "${sourceDir}/build/debug"
     },
@@ -30,9 +31,25 @@
         "strategy": "external"
       },
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
+        "CMAKE_BUILD_TYPE": "Release",
+        "ENABLE_ASAN": "OFF"
       },
       "binaryDir": "${sourceDir}/build/release"
+    },
+    {
+      "name": "windows-asan",
+      "displayName": "Windows x64 Asan build",
+      "description": "Builds x64 debug version with address sanitization",
+      "generator": "Ninja",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ENABLE_ASAN": "ON"
+      },
+      "binaryDir": "${sourceDir}/build/asan"
     },
     {
       "name": "linux-release",
@@ -44,7 +61,8 @@
         "strategy": "external"
       },
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
+        "CMAKE_BUILD_TYPE": "Release",
+        "ENABLE_ASAN": "OFF"
       },
       "binaryDir": "${sourceDir}/build/release"
     },
@@ -58,7 +76,8 @@
         "strategy": "external"
       },
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ENABLE_ASAN": "OFF"
       },
       "binaryDir": "${sourceDir}/build/debug"
     }
@@ -79,6 +98,10 @@
     {
       "name": "linux-debug",
       "configurePreset": "linux-debug"
+    },
+    {
+      "name": "windows-asan",
+      "configurePreset": "windows-asan"
     }
   ]
 }

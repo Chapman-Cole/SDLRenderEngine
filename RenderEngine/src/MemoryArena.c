@@ -35,12 +35,14 @@ void* MemoryArena_allocate(MemoryArena* arena, size_t size) {
 
     // If the function makes it here, that means there was no space available, so allocate a new block
     MemoryArenaBlock new_block = {0};
+    // 1.5x should be a good enough multiplier for the memory given that the base capacity of arenas are 
+    // already supposed to be fairly large
+    new_block.capacity = (3 * arena->arr[0].capacity) / 2;
     new_block.base = SDL_malloc(arena->arr[0].capacity);
     if (new_block.base == NULL) {
         SDL_Log("Failed to allocate memory for arena: %s", SDL_GetError());
         return NULL;
     }
-    new_block.capacity = arena->arr[0].capacity;
     new_block.tracker = new_block.base;
     new_block.amountAllocated = 0;
 

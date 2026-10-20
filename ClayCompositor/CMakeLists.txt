@@ -5,6 +5,7 @@ add_library(ClayCompositor STATIC
 if (ENABLE_ASAN)
     if(WIN32)
         target_compile_options(ClayCompositor PRIVATE /fsanitize=address)
+        target_link_options(ClayCompositor PRIVATE /INCREMENTAL:NO)
     elseif(UNIX)
         target_compile_options(ClayCompositor PRIVATE -fsanitize=address -fno-omit-frame-pointer -g)
         target_link_options(ClayCompositor PRIVATE -fsanitize=address)

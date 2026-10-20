@@ -3,7 +3,7 @@
 #define BUCKET_GROW_AMOUNT 3
 
 // Use FNV-1a hashing function
-static Uint32 basic_hash_function(const char* identifier) {
+static Uint32 fnv1a_hash(const char* identifier) {
     static const Uint32 FNV_offset_basis = 2166136261;
     static const Uint32 FNV_prime = 16777619;
 
@@ -19,7 +19,7 @@ static Uint32 basic_hash_function(const char* identifier) {
 }
 
 int FontRegistrySet(FontRegistry* registry, const char* identifier, const char* path, float pts) {
-    Uint32 index = basic_hash_function(identifier) & (FONT_REGISTRY_HASHMAP_LEN - 1);
+    Uint32 index = fnv1a_hash(identifier) & (FONT_REGISTRY_HASHMAP_LEN - 1);
 
     SDL_PropertiesID fontProps = SDL_CreateProperties();
     SDL_SetStringProperty(fontProps, TTF_PROP_FONT_CREATE_FILENAME_STRING, path);
@@ -95,7 +95,7 @@ int FontRegistrySet(FontRegistry* registry, const char* identifier, const char* 
 }
 
 TTF_Font* FontRegistryGet(FontRegistry* registry, const char* identifier) {
-    Uint32 index = basic_hash_function(identifier) & (FONT_REGISTRY_HASHMAP_LEN - 1);
+    Uint32 index = fnv1a_hash(identifier) & (FONT_REGISTRY_HASHMAP_LEN - 1);
 
     if (registry->hashmap[index].len == 1) {
         return registry->hashmap[index].arr[0].font;
@@ -111,7 +111,7 @@ TTF_Font* FontRegistryGet(FontRegistry* registry, const char* identifier) {
 }
 
 int FontRegistryRemove(FontRegistry* registry, const char* identifier) {
-    Uint32 index = basic_hash_function(identifier) & (FONT_REGISTRY_HASHMAP_LEN - 1);
+    Uint32 index = fnv1a_hash(identifier) & (FONT_REGISTRY_HASHMAP_LEN - 1);
 
     if (registry->hashmap[index].len == 1) {
         TTF_CloseFont(registry->hashmap[index].arr[0].font);
@@ -181,7 +181,7 @@ int FontRegistryDestroy(FontRegistry* registry) {
 
 FontRegistryKey FontRegistryGenKey(FontRegistry* registry, const char* identifier) {
     FontRegistryKey key;
-    Uint32 index = basic_hash_function(identifier) & (FONT_REGISTRY_HASHMAP_LEN - 1);
+    Uint32 index = fnv1a_hash(identifier) & (FONT_REGISTRY_HASHMAP_LEN - 1);
     key = index; // lower 8 bits are the index into the hashmap array
 
     if (registry->hashmap[index].len == 1) {

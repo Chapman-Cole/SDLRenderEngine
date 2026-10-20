@@ -128,13 +128,21 @@ int GPUTransferContextSubmit(GPUTransferContext* transferContext) {
     return 0;
 }
 
-int GPUTransferContextUpload(GPUTransferContext* transferContext, GPUBuffer* gpuBuffer, void* data, Uint32 data_size) {
+TransferContextData GPUTransferContextAcquireStagingBuffer(GPUTransferContext* transferContext, Uint32 data_size) {
+    TransferContextData transferData = {0};
+    transferData.buffer = MemoryArena_allocate(&transferContext->dataStagingArena, data_size);
+    transferData.buffer_size = data_size;
+    transferData._stagingBuffer = true;
+    return transferData;
+}
+
+int GPUTransferContextUpload(GPUTransferContext* transferContext, GPUBuffer* gpuBuffer, TransferContextData data) {
     TransferContextInfo transferContextInfo = {0};
 
     for (int i = 0; i < transferContext->transferBuffers.len; i++) {
         TransferBufferInfo currTbInfo = transferContext->transferBuffers.arr[i];
 
-        if (i == transferContext->transferBuffers.len - 1 && currTbInfo.amountFilled + data_size > currTbInfo.bufferSize) {
+        if (i == transferContext->transferBuffers.len - 1 && currTbInfo.amountFilled + data.buffer_size > currTbInfo.bufferSize) {
             TransferBufferInfo tbInfo = {0};
             tbInfo.bufferSize = TRANSFER_BUFFER_SIZE;
             tbInfo.amountFilled = 0;
@@ -157,16 +165,16 @@ int GPUTransferContextUpload(GPUTransferContext* transferContext, GPUBuffer* gpu
             transferContextInfo.tbOffset = transferContext->transferBuffers.arr[transferContext->transferBuffers.len - 1].amountFilled;
             // Have to use pointers to modify the original value in the array and not the local stack variable tbInfo
             // (I've made this mistake a lot today, so I'm adding this as a reminder)
-            transferContext->transferBuffers.arr[i].amountFilled += data_size;
+            transferContext->transferBuffers.arr[i].amountFilled += data.buffer_size;
             break;
-        } else if (currTbInfo.amountFilled + data_size > currTbInfo.bufferSize) {
+        } else if (currTbInfo.amountFilled + data.buffer_size > currTbInfo.bufferSize) {
             continue;
         } else {
             transferContextInfo.tbIndex = i;
             transferContextInfo.tbOffset = currTbInfo.amountFilled;
             // Have to use pointers to modify the original value in the array and not the local stack variable tbInfo
             // (I've made this mistake a lot today, so I'm adding this as a reminder)
-            transferContext->transferBuffers.arr[i].amountFilled += data_size;
+            transferContext->transferBuffers.arr[i].amountFilled += data.buffer_size;
             break;
         }
     }
@@ -174,13 +182,17 @@ int GPUTransferContextUpload(GPUTransferContext* transferContext, GPUBuffer* gpu
     GPUBUFFER_ACQUIRE_REFERENCE(gpuBuffer);
     transferContextInfo.gpuBuffer = gpuBuffer;
 
-    // This is done to ensure the data persists in memory by upload time, as the provided data pointer
-    // be de-allocated by the program before GPUTransferContextSubmit is called, and mapping of the data
-    // to the transfer buffer is handled then
-    transferContextInfo.data = MemoryArena_allocate(&transferContext->dataStagingArena, data_size);
-    SDL_memcpy(transferContextInfo.data, data, data_size);
+    if (data._stagingBuffer == true) {
+        transferContextInfo.data = data.buffer;
+    } else {
+        // This is done to ensure the data persists in memory by upload time, as the provided data pointer
+        // be de-allocated by the program before GPUTransferContextSubmit is called, and mapping of the data
+        // to the transfer buffer is handled then
+        transferContextInfo.data = MemoryArena_allocate(&transferContext->dataStagingArena, data.buffer_size);
+        SDL_memcpy(transferContextInfo.data, data.buffer, data.buffer_size);
+    }
 
-    transferContextInfo.dataSize = data_size;
+    transferContextInfo.dataSize = data.buffer_size;
 
     DYNAMIC_ARRAY_APPEND(transferContext->contextInfo, transferContextInfo);
 

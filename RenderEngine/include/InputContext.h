@@ -1,11 +1,8 @@
 #ifndef INPUTCONTEXT_H
 #define INPUTCONTEXT_H
 
-#include "GPUText.h"
-
-#define INPUT_CONTEXT_BASE_BUFFER_SIZE 2000
-
-#define INPUT_CONTEXT_TEXT_ARRAY_GROW_AMOUNT 10
+#include "SDL3_ttf/SDL_ttf.h"
+#include "AppContext.h"
 
 typedef struct InputContextLayout {
     float x;
@@ -14,14 +11,37 @@ typedef struct InputContextLayout {
     float height;
 } InputContextLayout;
 
+typedef struct TextLine {
+    char* arr;
+    size_t len;
+    size_t capacity;
+} TextLine;
+
+typedef struct TextLineArray {
+    TextLine* arr;
+    size_t len;
+    size_t capacity;
+} TextLineArray;
+
+typedef struct TextRenderInfo {
+    TTF_Text* text;
+} TextRenderInfo;
+
+typedef struct TextRenderInfoArray {
+    TextRenderInfo* arr;
+    size_t len;
+    size_t capacity;
+} TextRenderInfoArray;
+
 typedef struct InputContext {
     InputContextLayout layout;
     InputContextLayout prevLayout;
-    char* buffer;
+    TextLineArray buffer;
+    TextRenderInfoArray renderInfo;
     TTF_Font* font;
-    GPUText gpuText;
-    int bufferLen;
-    int bufferCapacity;
+    GPUBuffer* vertexBuffer;
+    GPUBuffer* indexBuffer;
+    int cursorLine;
     int cursorIndex;
     int cursorX; // Used for rendering the cursor
     int cursorY; // Used for rendering the cursor
@@ -45,12 +65,6 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event);
 // Should be called inside SDL_AppIterate callback or placed inside main loop
 int InputContextRefresh(InputContext* inputContext);
 
-static inline int InputContextDestroy(InputContext* inputContext) {
-    GPUTextDestroy(&inputContext->gpuText);
-    SDL_free(inputContext->buffer);
-    inputContext->buffer = NULL;
-    inputContext->cursorIndex = 0;
-    return 0;
-}
+int InputContextDestroy(InputContext* inputContext);
 
 #endif

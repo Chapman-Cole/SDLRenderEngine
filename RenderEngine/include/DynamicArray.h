@@ -5,6 +5,18 @@
 #include "stddef.h"
 #include "stdint.h"
 
+// Instructions:
+// When you pass in a struct to the macros, the struct you have defined must include
+// a pointer type (can be any pointer type) with the exact name 'arr', a size_t type with the exact name 'len',
+// and a size_t type with the exact name 'capacity'. An example of a dynamic array struct for integers would look like
+// typedef struct IntegerArray {
+//     int* arr;
+//     size_t len;
+//     size_t capacity;
+// } IntegerArray;
+// The macros then use the fact that the structs have these predefined, named variables to update the length
+// and capacity accordingly, set elements in the array, etc.
+
 // Specifies the offsets (in bytes) to the array pointer, len, and capacity of the array in
 // the struct. The element_size will be provided directly
 typedef struct DynamicArrayInfo {
@@ -62,8 +74,13 @@ static inline int _dynamic_array_shrink(void* arrayStruct, DynamicArrayInfo* arr
     (arrayStruct).len = 0;              \
     (arrayStruct).capacity = 1;
 
-#define DYNAMIC_ARRAY_INFO(arrayStruct) \
-    ((DynamicArrayInfo){.arr = offsetof(typeof((arrayStruct)), arr), .len = offsetof(typeof((arrayStruct)), len), .capacity = offsetof(typeof((arrayStruct)), capacity), .element_size = sizeof(*((arrayStruct).arr))})
+#define DYNAMIC_ARRAY_INFO(arrayStruct)                        \
+    ((DynamicArrayInfo){                                       \
+        .arr = offsetof(typeof((arrayStruct)), arr),           \
+        .len = offsetof(typeof((arrayStruct)), len),           \
+        .capacity = offsetof(typeof((arrayStruct)), capacity), \
+        .element_size = sizeof(*((arrayStruct).arr)),          \
+    })
 
 #define DYNAMIC_ARRAY_FREE(arrayStruct) \
     SDL_free((arrayStruct).arr);        \

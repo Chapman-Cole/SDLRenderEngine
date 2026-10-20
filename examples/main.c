@@ -1,5 +1,6 @@
 
 #define SDL_MAIN_USE_CALLBACKS
+#include "HashMap.h"
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
 #include "SDLRenderEngine.h"
@@ -10,6 +11,10 @@ static const char* font_path = "C:\\WINDOWS\\FONTS\\SEGUIVAR.TTF";
 #elif defined(__linux__)
 static const char* font_path = "/usr/share/fonts/source-foundry-hack-fonts/Hack-Regular.ttf";
 #endif
+
+HASH_MAP_DEFINE_TYPE(IntegerHashMap, uint32_t, int)
+HASH_MAP_DEFINE_TYPE(FloatHashMap, uint64_t, float)
+HASH_MAP_DEFINE_TYPE(PointHashMap, HashMapString, SDL_FPoint)
 
 static AppContext appContext = {0};
 static FontRegistry fontRegistry;
@@ -27,16 +32,30 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 
     SDL_StartTextInput(appContext.window);
 
-    InputContextCreate(&inputContext, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"), (float[4]){1.0, 1.0, 1.0, 1.0f}, (float[4]){1.0, 1.0, 1.0, 1.0f}, (InputContextLayout){.x = 100.0f, .y = 100.0f, .width = 2000.0f, .height = 1000.0f});
+    // InputContextCreate(&inputContext, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"), (float[4]){1.0, 1.0, 1.0, 1.0f}, (float[4]){1.0, 1.0, 1.0, 1.0f}, (InputContextLayout){.x = 100.0f, .y = 100.0f, .width = 2000.0f, .height = 1000.0f});
 
     GPUTextCreate(&fpsText, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"), "FPS:", 0, (float[4]){1.0, 1.0, 1.0, 1.0});
+
+    PointHashMap hashMap;
+    HASH_MAP_INIT(hashMap);
+
+    HASH_MAP_STRING_PUT(hashMap, HASH_MAP_STRING_LITERAL("test"), ((SDL_FPoint){.x = 32, .y = 12}));
+    HASH_MAP_STRING_PUT(hashMap, HASH_MAP_STRING_LITERAL("key1"), ((SDL_FPoint){.x = 99, .y = 11}));
+
+    SDL_FPoint point1 = HASH_MAP_STRING_GET(hashMap, HASH_MAP_STRING_LITERAL("test"));
+    SDL_FPoint point2 = HASH_MAP_STRING_GET(hashMap, HASH_MAP_STRING_LITERAL("key1"));
+    SDL_Log("Point 1: (%f, %f)", point1.x, point1.y);
+    SDL_Log("Point 2: (%f, %f)", point2.x, point2.y);
+
+
+    HASH_MAP_FREE(hashMap);
 
     return SDL_APP_CONTINUE;
 }
 
 SDL_AppResult SDL_AppIterate(void* appstate) {
     AppContextUpdate(&appContext);
-    InputContextRefresh(&inputContext);
+    // InputContextRefresh(&inputContext);
 
     static char buff[200] = {0};
     static int buffLen = 0;
@@ -50,7 +69,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 
     if (fps_time_tracker >= 0.2) {
         SDL_snprintf(buff, 200, "FPS: %d", (int)(fps_counter / (double)frame_counter));
-        
+
         GPUTextUpdate(&fpsText, buff, buffLen);
 
         fps_counter = 0.0;
@@ -66,7 +85,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     }
 
     DrawText(&renderContext, &fpsText, (float[2]){renderContext.renderWidth - fpsText.width, renderContext.renderHeight - fpsText.height});
-    DrawInputContext(&renderContext, &inputContext);
+    // DrawInputContext(&renderContext, &inputContext);
 
     RenderContextEnd(&renderContext);
 
@@ -78,7 +97,7 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
         return SDL_APP_SUCCESS;
     }
 
-    InputContextProcessEvent(&inputContext, event);
+    // InputContextProcessEvent(&inputContext, event);
 
     return SDL_APP_CONTINUE;
 }
@@ -86,7 +105,7 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
 void SDL_AppQuit(void* appstate, SDL_AppResult result) {
     GPUTextDestroy(&fpsText);
 
-    InputContextDestroy(&inputContext);
+    // InputContextDestroy(&inputContext);
 
     SDL_StopTextInput(appContext.window);
 

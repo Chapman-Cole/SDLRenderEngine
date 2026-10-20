@@ -10,12 +10,6 @@ typedef struct IntArray {
     size_t capacity;
 } IntArray;
 
-typedef struct CharArray {
-    char* arr;
-    size_t len;
-    size_t capacity;
-} CharArray;
-
 static inline int get_utf8_width(Uint32 code) {
     if (code <= 127) {
         return 1;
@@ -28,68 +22,14 @@ static inline int get_utf8_width(Uint32 code) {
     }
 }
 
-static inline int prev_line_start_index(const char* buffer, int cursorIndex) {
-    const char* prevNewlineStart = &buffer[cursorIndex];
-    int newlineIndex = cursorIndex;
-
-    while (true) {
-        Uint32 code = SDL_StepBackUTF8(buffer, &prevNewlineStart);
-        newlineIndex -= get_utf8_width(code);
-
-        if (code == '\n') {
-            return newlineIndex + 1; // This will get the actual start instead of including the newline
-        } else if (code == 0) {
-            // code == 0 means it reached the start of the buffer
-            return 0;
-        }
-    }
-}
-
-static inline int next_line_start_index(const char* buffer, int cursorIndex) {
-    const char* start = buffer + cursorIndex;
-    int nextLineStartIndex = cursorIndex;
-
-    while (true) {
-        Uint32 code = SDL_StepUTF8(&start, NULL);
-        nextLineStartIndex += get_utf8_width(code);
-
-        if (code == '\n') {
-            return nextLineStartIndex;
-        } else if (code == 0) {
-            // code == 0 means it reached the end of the buffer. The minus 1 is needed
-            // because otherwise the null terminator is counted as a character
-            return nextLineStartIndex - 1;
-        }
-    }
-}
-
-static inline int get_num_newlines(const char* buffer, int cursorIndex) {
-    int tracker = 0;
-    int numNewLines = 0;
-    while (tracker < cursorIndex) {
-        Uint32 code = SDL_StepUTF8(&buffer, NULL);
-        if (code == '\n') {
-            numNewLines++;
-        }
-        tracker += get_utf8_width(code);
-    }
-
-    return numNewLines;
-}
-
 int InputContextCreate(InputContext* inputContext, AppContext* appContext, TTF_Font* font, float textColor[4], float cursorColor[4], InputContextLayout layout) {
-    inputContext->bufferCapacity = INPUT_CONTEXT_BASE_BUFFER_SIZE;
-    inputContext->bufferLen = 0;
+    DYNAMIC_ARRAY_INIT(inputContext->buffer);
 
-    inputContext->buffer = SDL_malloc(inputContext->bufferCapacity * sizeof(char));
-    if (inputContext->buffer == NULL) {
-        SDL_Log("Failed to allocate memory for InputContext: %s", SDL_GetError());
-        return -1;
-    }
+    TextLine firstLine;
+    DYNAMIC_ARRAY_INIT(firstLine);
+    DYNAMIC_ARRAY_APPEND(inputContext->buffer, firstLine);
 
-    // Make sure the buffer starts out as null terminated
-    inputContext->buffer[0] = '\0';
-    inputContext->cursorIndex = 0;
+    DYNAMIC_ARRAY_INIT(inputContext->renderInfo);
 
     inputContext->cursorHeight = TTF_GetFontHeight(font);
     inputContext->cursorX = 0;
@@ -112,41 +52,20 @@ int InputContextCreate(InputContext* inputContext, AppContext* appContext, TTF_F
     inputContext->cursorWasModified = false;
 
     inputContext->font = font;
-
-    GPUTextCreate(&inputContext->gpuText, appContext, font, "", 0, textColor);
     return 0;
+}
+
+int InputContextDestroy(InputContext* inputContext) {
 }
 
 static inline int InputContextBufferInsert(InputContext* inputContext, const char* text) {
     int textLen = SDL_strlen(text);
-
-    if (inputContext->bufferLen + textLen >= inputContext->bufferCapacity) {
-        inputContext->bufferCapacity += SDL_max(INPUT_CONTEXT_BASE_BUFFER_SIZE, textLen);
-        void* temp_ptr = SDL_realloc(inputContext->buffer, inputContext->bufferCapacity);
-        if (temp_ptr == NULL) {
-            SDL_Log("Failed to re-allocate memory for InputContext buffer: %s", SDL_GetError());
-            return -1;
-        }
-        inputContext->buffer = temp_ptr;
-    }
-
-    if (inputContext->cursorIndex == inputContext->bufferLen) {
-        SDL_memcpy(inputContext->buffer + inputContext->bufferLen, text, textLen);
-    } else {
-        SDL_memmove(inputContext->buffer + inputContext->cursorIndex + textLen, inputContext->buffer + inputContext->cursorIndex, inputContext->bufferLen - inputContext->cursorIndex);
-        SDL_memcpy(inputContext->buffer + inputContext->cursorIndex, text, textLen);
-    }
-
-    inputContext->bufferLen += textLen;
-    inputContext->cursorIndex += textLen;
-
-    // Keep the input buffer null terminated
-    inputContext->buffer[inputContext->bufferLen] = '\0';
-
+    DYNAMIC_ARRAY_INSERT_ARRAY(inputContext->buffer.arr[inputContext->cursorLine], ((TextLine){.arr = text, .len = textLen, .capacity = 0}), inputContext->cursorIndex);
     return 0;
 }
 
 // Generates the GPUText object while accounting for text wrapping
+/*
 static inline int InputContextGenTextWrap(InputContext* inputContext) {
     IntArray indices;
     DYNAMIC_ARRAY_INIT(indices);
@@ -228,15 +147,13 @@ static inline int InputContextGenTextWrap(InputContext* inputContext) {
     DYNAMIC_ARRAY_FREE(tempBuffer);
     return 0;
 }
+    */
 
 int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
-    bool bufferModified = false;
-    bool cursorModified = false;
-
     switch (event->type) {
     case SDL_EVENT_TEXT_INPUT: {
         InputContextBufferInsert(inputContext, event->text.text);
-        bufferModified = true;
+        inputContext->bufferWasModified = true;
     } break;
 
     case SDL_EVENT_KEY_DOWN: {
@@ -244,142 +161,99 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
 
         switch (event->key.key) {
         case SDLK_BACKSPACE: {
-            if (inputContext->cursorIndex == 0) {
-                return 0;
+            if (inputContext->cursorIndex == 0 && inputContext->cursorLine > 0) {
+                DYNAMIC_ARRAY_INSERT_ARRAY(
+                    inputContext->buffer.arr[inputContext->cursorLine - 1],
+                    inputContext->buffer.arr[inputContext->cursorLine],
+                    inputContext->buffer.arr[inputContext->cursorLine - 1].len);
+
+                DYNAMIC_ARRAY_REMOVE(inputContext->buffer, inputContext->cursorLine);
+                inputContext->cursorLine--;
+
+                inputContext->bufferWasModified = true;
+            } else if (inputContext->cursorIndex > 0) {
+                DYNAMIC_ARRAY_REMOVE(inputContext->buffer.arr[inputContext->cursorLine], inputContext->cursorIndex);
+                inputContext->bufferWasModified = true;
             }
-
-            const char* indexStr = &inputContext->buffer[inputContext->cursorIndex];
-            Uint32 code = SDL_StepBackUTF8(inputContext->buffer, &indexStr);
-            int prevLen = get_utf8_width(code);
-
-            if (inputContext->cursorIndex != inputContext->bufferLen) {
-                SDL_memmove(inputContext->buffer + inputContext->cursorIndex - prevLen, inputContext->buffer + inputContext->cursorIndex, inputContext->bufferLen - inputContext->cursorIndex);
-            }
-
-            inputContext->bufferLen -= prevLen;
-            inputContext->cursorIndex -= prevLen;
-            inputContext->buffer[inputContext->bufferLen] = '\0';
-
-            // -1 is to account for null terminator
-            if (inputContext->bufferLen < inputContext->bufferCapacity - INPUT_CONTEXT_BASE_BUFFER_SIZE - 1) {
-                inputContext->bufferCapacity -= INPUT_CONTEXT_BASE_BUFFER_SIZE;
-                void* temp_ptr = SDL_realloc(inputContext->buffer, inputContext->bufferCapacity);
-                if (temp_ptr == NULL) {
-                    SDL_Log("Failed to re-allocate memory for InputContext buffer: %s", SDL_GetError());
-                    return -1;
-                }
-                inputContext->buffer = temp_ptr;
-            }
-
-            bufferModified = true;
         } break;
 
         case SDLK_RETURN: {
-            InputContextBufferInsert(inputContext, "\n");
-            bufferModified = true;
+            TextLine newLine;
+            DYNAMIC_ARRAY_INIT(newLine);
+            DYNAMIC_ARRAY_INSERT(inputContext->buffer, inputContext->cursorLine + 1, newLine);
+            inputContext->cursorLine++;
+            inputContext->bufferWasModified = true;
         } break;
 
         case SDLK_LEFT: {
-            const char* indexStr = &inputContext->buffer[inputContext->cursorIndex];
-            Uint32 code = SDL_StepBackUTF8(inputContext->buffer, &indexStr);
+            const char* indexStr = &inputContext->buffer.arr[inputContext->cursorLine].arr[inputContext->cursorIndex];
+            Uint32 code = SDL_StepBackUTF8(inputContext->buffer.arr[inputContext->cursorLine].arr, &indexStr);
             inputContext->cursorIndex -= get_utf8_width(code);
             if (inputContext->cursorIndex < 0) {
                 inputContext->cursorIndex = 0;
+                inputContext->cursorLine--;
+                if (inputContext->cursorLine < 0) {
+                    inputContext->cursorLine = 0;
+                }
             }
-            cursorModified = true;
+            inputContext->cursorWasModified = true;
         } break;
 
         case SDLK_RIGHT: {
-            const char* start = &inputContext->buffer[inputContext->cursorIndex];
+            const char* start = &inputContext->buffer.arr[inputContext->cursorLine].arr[inputContext->cursorIndex];
             Uint32 code = SDL_StepUTF8(&start, NULL);
             inputContext->cursorIndex += get_utf8_width(code);
-            if (inputContext->cursorIndex > inputContext->bufferLen) {
-                inputContext->cursorIndex = inputContext->bufferLen;
+            if (inputContext->cursorIndex > inputContext->buffer.arr[inputContext->cursorLine].len) {
+                inputContext->cursorIndex = inputContext->buffer.arr[inputContext->cursorLine].len;
             }
-            cursorModified = true;
+            inputContext->cursorWasModified = true;
         } break;
 
         case SDLK_UP: {
-            int currLineStartIndex = prev_line_start_index(inputContext->buffer, inputContext->cursorIndex);
-            if (currLineStartIndex == 0) {
-                inputContext->cursorIndex = 0;
-            } else {
-                int currLineCharOffset = SDL_utf8strnlen(inputContext->buffer + currLineStartIndex, inputContext->cursorIndex - currLineStartIndex);
-
-                // -1 to avoid including the newline character
-                int prevLineStartIndex = prev_line_start_index(inputContext->buffer, currLineStartIndex - 1);
-                int prevLineCharLength = SDL_utf8strnlen(inputContext->buffer + prevLineStartIndex, currLineStartIndex - 1 - prevLineStartIndex);
-
-                if (prevLineCharLength <= currLineCharOffset) {
-                    inputContext->cursorIndex = currLineStartIndex - 1;
-                } else {
-                    const char* start = inputContext->buffer + prevLineStartIndex;
-                    inputContext->cursorIndex = prevLineStartIndex;
-                    for (int i = 0; i < currLineCharOffset; i++) {
-                        Uint32 code = SDL_StepUTF8(&start, NULL);
-                        inputContext->cursorIndex += get_utf8_width(code);
-                    }
-                }
+            inputContext->cursorLine--;
+            if (inputContext->cursorLine < 0) {
+                inputContext->cursorLine = 0;
             }
-            cursorModified = true;
+
+            if (inputContext->cursorIndex > inputContext->buffer.arr[inputContext->cursorLine].len) {
+                inputContext->cursorIndex = inputContext->buffer.arr[inputContext->cursorLine].len;
+            }
+
+            inputContext->cursorWasModified = true;
         } break;
 
         case SDLK_DOWN: {
-            int currLineStartIndex = prev_line_start_index(inputContext->buffer, inputContext->cursorIndex);
-            int currLineCharOffset = SDL_utf8strnlen(inputContext->buffer + currLineStartIndex, inputContext->cursorIndex - currLineStartIndex);
-
-            int nextLineStartIndex = next_line_start_index(inputContext->buffer, inputContext->cursorIndex);
-
-            if (nextLineStartIndex >= inputContext->bufferLen) {
-                inputContext->cursorIndex = inputContext->bufferLen;
-            } else {
-                int nextNextLineStartIndex = next_line_start_index(inputContext->buffer, nextLineStartIndex);
-                int nextLineCharLength = SDL_utf8strnlen(inputContext->buffer + nextLineStartIndex, nextNextLineStartIndex - nextLineStartIndex);
-
-                if (nextLineCharLength <= currLineCharOffset) {
-                    if (nextNextLineStartIndex >= inputContext->bufferLen) {
-                        inputContext->cursorIndex = inputContext->bufferLen;
-                    } else {
-                        // -1 is to account for the null terminator
-                        inputContext->cursorIndex = nextNextLineStartIndex - 1;
-                    }
-                } else {
-                    // The minus 1 is to account for the fact that SDL_StepUTF8 function
-                    // gets the next character, so it is necessary to start with the null
-                    // terminator so that the next character represents the start of the line
-                    const char* start = inputContext->buffer + nextLineStartIndex - 1;
-                    inputContext->cursorIndex = nextLineStartIndex;
-                    for (int i = 0; i < currLineCharOffset; i++) {
-                        Uint32 code = SDL_StepUTF8(&start, NULL);
-                        inputContext->cursorIndex += get_utf8_width(code);
-                    }
-                }
+            inputContext->cursorLine++;
+            if (inputContext->cursorLine >= inputContext->buffer.len) {
+                inputContext->cursorLine = inputContext->buffer.len - 1;
             }
-            cursorModified = true;
+
+            if (inputContext->cursorLine == inputContext->buffer.len - 1) {
+                inputContext->cursorIndex = inputContext->buffer.arr[inputContext->cursorLine].len;
+            }
+
+            inputContext->cursorWasModified = true;
         } break;
 
         // Process ctrl + v for pasting
         case SDLK_V: {
             if (key_states[SDL_SCANCODE_LCTRL] == true) {
+                /* Multi line pastes will be challenging, so handle them later for now
                 char* clipboardText = SDL_GetClipboardText();
                 InputContextBufferInsert(inputContext, clipboardText);
                 SDL_free(clipboardText);
                 bufferModified = true;
+                */
             }
         }
         }
     } break;
     }
 
-    if (bufferModified == true) {
-        inputContext->bufferWasModified = true;
-    }
-
-    if (bufferModified == true || cursorModified == true) {
-        inputContext->cursorWasModified = true;
-    }
-
     return 0;
+}
+
+static inline void InputContextGenerateGPUBuffers(InputContext* inputContext) {
 }
 
 int InputContextRefresh(InputContext* inputContext) {
@@ -394,10 +268,11 @@ int InputContextRefresh(InputContext* inputContext) {
     }
 
     if (inputContext->bufferWasModified == true) {
-        InputContextGenTextWrap(inputContext);
+        // InputContextGenTextWrap(inputContext);
     }
 
     // Update cursor
+    /*
     if (inputContext->bufferWasModified == true || inputContext->cursorWasModified) {
         // The text could be a NULL pointer if it is set with an empty string, and get_num_newlines
         // and prev_line_start_index can't handle NULL pointers
@@ -425,6 +300,7 @@ int InputContextRefresh(InputContext* inputContext) {
             inputContext->cursorY = get_num_newlines(inputContext->gpuText.text->text, inputContext->cursorIndex) * inputContext->cursorHeight;
         }
     }
+        */
 
     inputContext->bufferWasModified = false;
     inputContext->cursorWasModified = false;

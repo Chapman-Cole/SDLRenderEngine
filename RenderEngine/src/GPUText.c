@@ -42,8 +42,11 @@ static inline int generateGPUBuffers(GPUText* renderText, AppContext* appContext
 
     numAtlasses = 0;
     for (; sequence != NULL; sequence = sequence->next) {
-        TextVertex* vertices = SDL_calloc(sequence->num_vertices, sizeof(TextVertex));
-        int* indices = SDL_calloc(sequence->num_indices, sizeof(int));
+        TransferContextData vertexData = GPUTransferContextAcquireStagingBuffer(&appContext->transferContext, sequence->num_vertices * sizeof(TextVertex));
+        TransferContextData fragmentData = GPUTransferContextAcquireStagingBuffer(&appContext->transferContext, sequence->num_indices * sizeof(int));
+
+        TextVertex* vertices = vertexData.buffer;
+        int* indices = fragmentData.buffer;
 
         for (int i = 0; i < sequence->num_vertices; i++) {
             vertices[i] = (TextVertex){.point = sequence->xy[i], .tex = sequence->uv[i]};
@@ -67,11 +70,8 @@ static inline int generateGPUBuffers(GPUText* renderText, AppContext* appContext
             .props = 0,
         });
 
-        GPUTransferContextUpload(&appContext->transferContext, textSequence.vertexBuffer, vertices, sequence->num_vertices * sizeof(TextVertex));
-        GPUTransferContextUpload(&appContext->transferContext, textSequence.indexBuffer, indices, sequence->num_indices * sizeof(int));
-
-        SDL_free(vertices);
-        SDL_free(indices);
+        GPUTransferContextUpload(&appContext->transferContext, textSequence.vertexBuffer, vertexData);
+        GPUTransferContextUpload(&appContext->transferContext, textSequence.indexBuffer, fragmentData);
 
         renderText->atlasses[numAtlasses] = textSequence;
 
