@@ -9,7 +9,7 @@
 #define MEMORY_ARENA_BASE_ALIGN 16
 
 typedef struct MemoryArenaBlock {
-    void* base;
+    uint8_t* base;
     uint8_t* tracker;
     size_t capacity;
 } MemoryArenaBlock;

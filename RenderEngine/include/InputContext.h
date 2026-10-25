@@ -1,8 +1,30 @@
 #ifndef INPUTCONTEXT_H
 #define INPUTCONTEXT_H
 
-#include "SDL3_ttf/SDL_ttf.h"
 #include "AppContext.h"
+#include "SDL3_ttf/SDL_ttf.h"
+
+typedef struct TextRenderInfoSequence {
+    SDL_GPUTexture* atlas;
+    Uint32 vertexBufferOffset;
+    Uint32 vertexBufferSize;
+    Uint32 indexBufferOffset;
+    Uint32 indexBufferSize;
+    Uint32 numIndices;
+} TextRenderInfoSequence;
+
+typedef struct TextRenderInfoSequenceArray {
+    TextRenderInfoSequence* arr;
+    size_t len;
+    size_t capacity;
+} TextRenderInfoSequenceArray;
+
+typedef struct TextRenderInfo {
+    TTF_Text* text;
+    GPUBuffer* vertexBuffer;
+    GPUBuffer* indexBuffer;
+    TextRenderInfoSequenceArray sequence;
+} TextRenderInfo;
 
 typedef struct InputContextLayout {
     float x;
@@ -23,36 +45,28 @@ typedef struct TextLineArray {
     size_t capacity;
 } TextLineArray;
 
-typedef struct TextRenderInfo {
-    TTF_Text* text;
-} TextRenderInfo;
-
-typedef struct TextRenderInfoArray {
-    TextRenderInfo* arr;
-    size_t len;
-    size_t capacity;
-} TextRenderInfoArray;
+#define INPUT_CONTEXT_BUFFER_WAS_MODIFIED (1 << 0)
+#define INPUT_CONTEXT_CURSOR_WAS_MODIFIED (1 << 1)
+#define INPUT_CONTEXT_LAYOUT_WAS_MODIFIED (1 << 2)
 
 typedef struct InputContext {
     InputContextLayout layout;
-    InputContextLayout prevLayout;
     TextLineArray buffer;
-    TextRenderInfoArray renderInfo;
     TTF_Font* font;
     GPUBuffer* vertexBuffer;
     GPUBuffer* indexBuffer;
+    AppContext* app_context;
     int cursorLine;
     int cursorIndex;
-    int cursorX; // Used for rendering the cursor
-    int cursorY; // Used for rendering the cursor
+    int cursorX;      // Used for rendering the cursor
+    int cursorY;      // Used for rendering the cursor
     int cursorHeight; // Used for rendering the cursor
-    bool bufferWasModified;
-    bool cursorWasModified;
+    uint32_t flags;
     float textColor[4];
     float cursorColor[4];
 } InputContext;
 
-// For use with SDL_PollEvent (or inside SDL_AppEvent callback). Also make sure to call 
+// For use with SDL_PollEvent (or inside SDL_AppEvent callback). Also make sure to call
 // SDL_StartTextInput before processing the SDL_EVENT_TEXT_ signals.
 // The text color can be changed at any point after this by simply setting the textColor field of the struct
 // to the desired value. The same goes for the cursorColor.
@@ -66,5 +80,10 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event);
 int InputContextRefresh(InputContext* inputContext);
 
 int InputContextDestroy(InputContext* inputContext);
+
+static inline void InputContextUpdateLayout(InputContext* inputContext, InputContextLayout layout) {
+    inputContext->layout = layout;
+    inputContext->flags |= INPUT_CONTEXT_LAYOUT_WAS_MODIFIED;
+}
 
 #endif

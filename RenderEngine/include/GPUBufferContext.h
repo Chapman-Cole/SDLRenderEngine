@@ -4,6 +4,7 @@
 #include "SDL3/SDL.h"
 
 typedef struct GPUBuffer {
+    SDL_GPUDevice* device;
     SDL_GPUBuffer* buffer;
     Uint32 refCount;
 } GPUBuffer;
@@ -24,14 +25,15 @@ static inline GPUBuffer* GPUBuffer_create(SDL_GPUDevice* device, const SDL_GPUBu
     }
 
     gpu_buffer->refCount = 1;
+    gpu_buffer->device = device;
 
     return gpu_buffer;
 }
 
-static inline void GPUBuffer_unref(SDL_GPUDevice* device, GPUBuffer* gpuBuffer) {
+static inline void GPUBuffer_unref(GPUBuffer* gpuBuffer) {
     gpuBuffer->refCount--;
     if (gpuBuffer->refCount == 0) {
-        SDL_ReleaseGPUBuffer(device, gpuBuffer->buffer);
+        SDL_ReleaseGPUBuffer(gpuBuffer->device, gpuBuffer->buffer);
         SDL_free(gpuBuffer);
     }
 }

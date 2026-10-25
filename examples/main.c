@@ -14,8 +14,6 @@ static const char* font_path = "/usr/share/fonts/source-foundry-hack-fonts/Hack-
 #endif
 
 HASH_MAP_STRING_KEY_DEFINE_TYPE(FloatHashMap, float)
-HASH_MAP_UINT32_KEY_DEFINE_TYPE(Uint32KeyHashMap, float)
-HASH_MAP_UINT64_KEY_DEFINE_TYPE(Uint64KeyHashMap, float)
 
 static AppContext appContext = {0};
 static FontRegistry fontRegistry;

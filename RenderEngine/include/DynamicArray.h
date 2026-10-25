@@ -108,7 +108,12 @@ static inline int _dynamic_array_shrink(void* arrayStruct, DynamicArrayInfo* arr
 #define DYNAMIC_ARRAY_REMOVE(arrayStruct, index)                                                                                               \
     _dynamic_array_shrink(&(arrayStruct), &DYNAMIC_ARRAY_INFO((arrayStruct)), 1);                                                              \
     SDL_memmove(&((arrayStruct).arr[index]), &((arrayStruct).arr[index + 1]), ((arrayStruct).len - index - 1) * sizeof(*((arrayStruct).arr))); \
-    (arrayStruct).len -= (arrayStruct).len == 0 ? 0 : 1;
+    (arrayStruct).len -= ((arrayStruct).len == 0 ? 0 : 1);
+
+#define DYNAMIC_ARRAY_REMOVE_SELECTION(arrayStruct, start, selection_len)                                                                \
+    _dynamic_array_shrink(&(arrayStruct), &DYNAMIC_ARRAY_INFO((arrayStruct)), selection_len);                                            \
+    SDL_memmove(&((arrayStruct).arr[start]), &((arrayStruct).arr[start + selection_len]), selection_len * sizeof(*((arrayStruct).arr))); \
+    (arrayStruct).len -= ((arrayStruct).len < selection_len ? 0 : selection_len);
 
 // When declaring an inline struct for the src struct, you will have to wrap it in parentheses
 // the dst struct should not be declared inline since it is being directly modified

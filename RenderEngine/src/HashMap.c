@@ -1,5 +1,21 @@
 #include "HashMap.h"
 
+// FNV-1a (Fowler-Noll-Vo) hashing function
+static inline uint32_t fnv1a_hash(void* key, uint32_t key_len) {
+    static const uint32_t FNV_offset_basis = 2166136261;
+    static const uint32_t FNV_prime = 16777619;
+
+    uint32_t hash = FNV_offset_basis;
+
+    uint8_t* bytes = (uint8_t*)(key);
+    for (uint32_t i = 0; i < key_len; i++) {
+        hash ^= bytes[i];
+        hash *= FNV_prime;
+    }
+
+    return hash;
+}
+
 void* __hash_map_get_with_uint32_key(HashMapInfo* info, void* hashmap, uint32_t key) {
     size_t hashmap_capacity = *(size_t*)((uint8_t*)hashmap + info->hashmap_capacity_offset);
     uint8_t* hashmap_bucket_array = *(uint8_t**)(hashmap); // The bucket array is the first element, so it has offset 0 always

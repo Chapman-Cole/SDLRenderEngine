@@ -13,7 +13,7 @@ int MemoryArena_create(MemoryArena* arena, size_t size) {
     }
 
     MemoryArenaBlock block;
-    block.base = SDL_malloc(size);
+    block.base = (uint8_t*)SDL_malloc(size);
     if (block.base == NULL) {
         SDL_Log("Failed to allocate memory for arena: %s", SDL_GetError());
         return -1;
@@ -45,7 +45,7 @@ void* MemoryArena_alloc(MemoryArena* arena, size_t size) {
     // 1.5x should be a good enough multiplier for the memory given that the base capacity of arenas are
     // already supposed to be fairly large
     new_block.capacity = (3 * arena->arr[0].capacity) / 2;
-    new_block.base = SDL_malloc(new_block.capacity);
+    new_block.base = (uint8_t*)SDL_malloc(new_block.capacity);
     if (new_block.base == NULL) {
         SDL_Log("Failed to allocate memory for arena: %s", SDL_GetError());
         return NULL;
@@ -87,7 +87,7 @@ void* MemoryArena_aligned_alloc(MemoryArena* arena, size_t size, size_t align_to
     // 1.5x should be a good enough multiplier for the memory given that the base capacity of arenas are
     // already supposed to be fairly large
     new_block.capacity = (3 * arena->arr[0].capacity) / 2;
-    new_block.base = SDL_malloc(new_block.capacity);
+    new_block.base = (uint8_t*)SDL_malloc(new_block.capacity);
     if (new_block.base == NULL) {
         SDL_Log("Failed to allocate memory for arena: %s", SDL_GetError());
         return NULL;

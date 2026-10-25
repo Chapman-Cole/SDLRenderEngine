@@ -80,6 +80,21 @@
         "ENABLE_ASAN": "OFF"
       },
       "binaryDir": "${sourceDir}/build/debug"
+    },
+    {
+      "name": "linux-asan",
+      "displayName": "Linux x64 Asan Build",
+      "description": "Linux x64 debug version with address sanitization",
+      "generator": "Unix Makefiles",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ENABLE_ASAN": "ON"
+      },
+      "binaryDir": "${sourceDir}/build/asan"
     }
   ],
   "buildPresets": [
@@ -102,6 +117,10 @@
     {
       "name": "windows-asan",
       "configurePreset": "windows-asan"
+    },
+    {
+      "name": "linux-asan",
+      "configurePreset": "linux-asan"
     }
   ]
 }
