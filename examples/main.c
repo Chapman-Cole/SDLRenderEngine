@@ -1,6 +1,7 @@
 
 #define SDL_MAIN_USE_CALLBACKS
 #include "HashMap.h"
+#include "MemoryHeap.h"
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
 #include "SDLRenderEngine.h"
@@ -12,9 +13,9 @@ static const char* font_path = "C:\\WINDOWS\\FONTS\\SEGUIVAR.TTF";
 static const char* font_path = "/usr/share/fonts/source-foundry-hack-fonts/Hack-Regular.ttf";
 #endif
 
-HASH_MAP_DEFINE_TYPE(IntegerHashMap, uint32_t, int)
-HASH_MAP_DEFINE_TYPE(FloatHashMap, uint64_t, float)
-HASH_MAP_DEFINE_TYPE(PointHashMap, HashMapString, SDL_FPoint)
+HASH_MAP_STRING_KEY_DEFINE_TYPE(FloatHashMap, float)
+HASH_MAP_UINT32_KEY_DEFINE_TYPE(Uint32KeyHashMap, float)
+HASH_MAP_UINT64_KEY_DEFINE_TYPE(Uint64KeyHashMap, float)
 
 static AppContext appContext = {0};
 static FontRegistry fontRegistry;
@@ -32,23 +33,55 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 
     SDL_StartTextInput(appContext.window);
 
+    FloatHashMap hashMap;
+    HASH_MAP_STRING_INIT(hashMap, 1'000);
+
+    char* strings[] = {
+        "test1",
+        "test2",
+        "test3",
+        "test4",
+        "test5",
+        "test6",
+        "test7",
+        "test8",
+        "test9",
+        "test10",
+        "test11",
+        "test12",
+        "test13",
+        "test14",
+        "test15",
+        "test16",
+        "test17",
+        "test18",
+        "test19",
+        "test20",
+        "test21",
+        "test22",
+        "test23",
+        "test24",
+        "test25",
+        "test26",
+        "test27",
+        "test28",
+        "test29",
+        "test30",
+    };
+
+    for (int i = 0; i < sizeof(strings) / sizeof(const char*); i++) {
+        HASH_MAP_STRING_PUT(hashMap, HASH_MAP_STRING_FROM_CSTRING(strings[i]), 0.2f * (float)(i + 1));
+    }
+
+    for (int i = 0; i < sizeof(strings) / sizeof(const char*); i++) {
+        SDL_Log("%s -> %f", strings[i], HASH_MAP_STRING_GET(hashMap, HASH_MAP_STRING_FROM_CSTRING(strings[i])));
+    }
+
+    HASH_MAP_STRING_FREE(hashMap);
+
     // InputContextCreate(&inputContext, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"), (float[4]){1.0, 1.0, 1.0, 1.0f}, (float[4]){1.0, 1.0, 1.0, 1.0f}, (InputContextLayout){.x = 100.0f, .y = 100.0f, .width = 2000.0f, .height = 1000.0f});
 
     GPUTextCreate(&fpsText, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"), "FPS:", 0, (float[4]){1.0, 1.0, 1.0, 1.0});
-
-    PointHashMap hashMap;
-    HASH_MAP_INIT(hashMap);
-
-    HASH_MAP_STRING_PUT(hashMap, HASH_MAP_STRING_LITERAL("test"), ((SDL_FPoint){.x = 32, .y = 12}));
-    HASH_MAP_STRING_PUT(hashMap, HASH_MAP_STRING_LITERAL("key1"), ((SDL_FPoint){.x = 99, .y = 11}));
-
-    SDL_FPoint point1 = HASH_MAP_STRING_GET(hashMap, HASH_MAP_STRING_LITERAL("test"));
-    SDL_FPoint point2 = HASH_MAP_STRING_GET(hashMap, HASH_MAP_STRING_LITERAL("key1"));
-    SDL_Log("Point 1: (%f, %f)", point1.x, point1.y);
-    SDL_Log("Point 2: (%f, %f)", point2.x, point2.y);
-
-
-    HASH_MAP_FREE(hashMap);
 
     return SDL_APP_CONTINUE;
 }

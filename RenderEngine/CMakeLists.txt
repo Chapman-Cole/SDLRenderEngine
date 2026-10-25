@@ -8,7 +8,9 @@ add_library(RenderEngine STATIC
     src/FontRegistry.c
     src/InputContext.c
     src/MemoryArena.c
- "include/GPUBufferContext.h")
+    src/MemoryHeap.c
+    src/HashMap.c
+ )
 
 if (ENABLE_ASAN)
     if(WIN32)

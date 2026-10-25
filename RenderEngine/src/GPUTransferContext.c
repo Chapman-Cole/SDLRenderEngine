@@ -130,7 +130,7 @@ int GPUTransferContextSubmit(GPUTransferContext* transferContext) {
 
 TransferContextData GPUTransferContextAcquireStagingBuffer(GPUTransferContext* transferContext, Uint32 data_size) {
     TransferContextData transferData = {0};
-    transferData.buffer = MemoryArena_allocate(&transferContext->dataStagingArena, data_size);
+    transferData.buffer = MemoryArena_alloc(&transferContext->dataStagingArena, data_size);
     transferData.buffer_size = data_size;
     transferData._stagingBuffer = true;
     return transferData;
@@ -188,7 +188,7 @@ int GPUTransferContextUpload(GPUTransferContext* transferContext, GPUBuffer* gpu
         // This is done to ensure the data persists in memory by upload time, as the provided data pointer
         // be de-allocated by the program before GPUTransferContextSubmit is called, and mapping of the data
         // to the transfer buffer is handled then
-        transferContextInfo.data = MemoryArena_allocate(&transferContext->dataStagingArena, data.buffer_size);
+        transferContextInfo.data = MemoryArena_alloc(&transferContext->dataStagingArena, data.buffer_size);
         SDL_memcpy(transferContextInfo.data, data.buffer, data.buffer_size);
     }
 
