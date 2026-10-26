@@ -16,10 +16,8 @@ struct VertexUniformData {
     float2 size;
     float2 position;
     float2 windowDims;
-    float aspectRatio;
-    float displayScale;
     float2 offset;
-    float2 pad; 
+    float4 pad;
 };
 
 [[vk::binding(0,1)]] // SDL3 requires vertex uniform data to be in set 1

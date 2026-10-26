@@ -8,12 +8,10 @@
 #include "stdlib.h"
 
 #ifdef _WIN32
-static const char* font_path = "C:\\WINDOWS\\FONTS\\SEGUIVAR.TTF";
+static const char* font_path = "C:\\WINDOWS\\FONTS\\CONSOLA.TTF";
 #elif defined(__linux__)
 static const char* font_path = "/usr/share/fonts/source-foundry-hack-fonts/Hack-Regular.ttf";
 #endif
-
-HASH_MAP_STRING_KEY_DEFINE_TYPE(FloatHashMap, float)
 
 static AppContext appContext = {0};
 static FontRegistry fontRegistry;
@@ -22,7 +20,7 @@ static GPUText fpsText;
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     appContext.windowName = "Renderer";
-    appContext.deviceName = APP_CONTEXT_DEVICE_DRIVER_AGNOSTIC;
+    appContext.deviceName = APP_CONTEXT_DEVICE_DRIVER_DIRECT3D12;
     AppContextInit(&appContext, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY, false, 1'000'000);
     SDL_SetGPUSwapchainParameters(appContext.device, appContext.window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_IMMEDIATE);
 
@@ -31,53 +29,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 
     SDL_StartTextInput(appContext.window);
 
-    FloatHashMap hashMap;
-    HASH_MAP_STRING_INIT(hashMap, 1'000);
-
-    char* strings[] = {
-        "test1",
-        "test2",
-        "test3",
-        "test4",
-        "test5",
-        "test6",
-        "test7",
-        "test8",
-        "test9",
-        "test10",
-        "test11",
-        "test12",
-        "test13",
-        "test14",
-        "test15",
-        "test16",
-        "test17",
-        "test18",
-        "test19",
-        "test20",
-        "test21",
-        "test22",
-        "test23",
-        "test24",
-        "test25",
-        "test26",
-        "test27",
-        "test28",
-        "test29",
-        "test30",
-    };
-
-    for (int i = 0; i < sizeof(strings) / sizeof(const char*); i++) {
-        HASH_MAP_STRING_PUT(hashMap, HASH_MAP_STRING_FROM_CSTRING(strings[i]), 0.2f * (float)(i + 1));
-    }
-
-    for (int i = 0; i < sizeof(strings) / sizeof(const char*); i++) {
-        SDL_Log("%s -> %f", strings[i], HASH_MAP_STRING_GET(hashMap, HASH_MAP_STRING_FROM_CSTRING(strings[i])));
-    }
-
-    HASH_MAP_STRING_FREE(hashMap);
-
-    // InputContextCreate(&inputContext, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"), (float[4]){1.0, 1.0, 1.0, 1.0f}, (float[4]){1.0, 1.0, 1.0, 1.0f}, (InputContextLayout){.x = 100.0f, .y = 100.0f, .width = 2000.0f, .height = 1000.0f});
+    InputContextCreate(&inputContext, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"), (float[4]){1.0, 1.0, 1.0, 1.0f}, (float[4]){1.0, 1.0, 1.0, 1.0f}, (InputContextLayout){.x = 100.0f, .y = 100.0f, .width = 2000.0f, .height = 1000.0f});
 
     GPUTextCreate(&fpsText, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"), "FPS:", 0, (float[4]){1.0, 1.0, 1.0, 1.0});
 
@@ -86,7 +38,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 
 SDL_AppResult SDL_AppIterate(void* appstate) {
     AppContextUpdate(&appContext);
-    // InputContextRefresh(&inputContext);
+    InputContextRefresh(&inputContext);
 
     static char buff[200] = {0};
     static int buffLen = 0;
@@ -116,7 +68,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     }
 
     DrawText(&renderContext, &fpsText, (float[2]){renderContext.renderWidth - fpsText.width, renderContext.renderHeight - fpsText.height});
-    // DrawInputContext(&renderContext, &inputContext);
+    DrawInputContext(&renderContext, &inputContext);
 
     RenderContextEnd(&renderContext);
 
@@ -128,7 +80,7 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
         return SDL_APP_SUCCESS;
     }
 
-    // InputContextProcessEvent(&inputContext, event);
+    InputContextProcessEvent(&inputContext, event);
 
     return SDL_APP_CONTINUE;
 }
@@ -136,7 +88,7 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
 void SDL_AppQuit(void* appstate, SDL_AppResult result) {
     GPUTextDestroy(&fpsText);
 
-    // InputContextDestroy(&inputContext);
+    InputContextDestroy(&inputContext);
 
     SDL_StopTextInput(appContext.window);
 

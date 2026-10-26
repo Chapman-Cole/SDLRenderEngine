@@ -6,10 +6,8 @@
 
 typedef struct TextRenderInfoSequence {
     SDL_GPUTexture* atlas;
-    Uint32 vertexBufferOffset;
-    Uint32 vertexBufferSize;
-    Uint32 indexBufferOffset;
-    Uint32 indexBufferSize;
+    GPUBuffer* vertexBuffer;
+    GPUBuffer* indexBuffer;
     Uint32 numIndices;
 } TextRenderInfoSequence;
 
@@ -21,9 +19,9 @@ typedef struct TextRenderInfoSequenceArray {
 
 typedef struct TextRenderInfo {
     TTF_Text* text;
-    GPUBuffer* vertexBuffer;
-    GPUBuffer* indexBuffer;
     TextRenderInfoSequenceArray sequence;
+    int textWidth;
+    int textHeight;
 } TextRenderInfo;
 
 typedef struct InputContextLayout {
@@ -34,9 +32,11 @@ typedef struct InputContextLayout {
 } InputContextLayout;
 
 typedef struct TextLine {
+    TextRenderInfo renderInfo;
     char* arr;
     size_t len;
     size_t capacity;
+    bool lineWasUpdated;
 } TextLine;
 
 typedef struct TextLineArray {
@@ -53,14 +53,13 @@ typedef struct InputContext {
     InputContextLayout layout;
     TextLineArray buffer;
     TTF_Font* font;
-    GPUBuffer* vertexBuffer;
-    GPUBuffer* indexBuffer;
     AppContext* app_context;
     int cursorLine;
     int cursorIndex;
     int cursorX;      // Used for rendering the cursor
     int cursorY;      // Used for rendering the cursor
     int cursorHeight; // Used for rendering the cursor
+    int line_spacing;
     uint32_t flags;
     float textColor[4];
     float cursorColor[4];

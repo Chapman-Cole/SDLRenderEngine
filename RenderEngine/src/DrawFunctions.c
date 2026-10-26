@@ -135,11 +135,11 @@ void DrawText(RenderContext* renderContext, GPUText* text, float position[2]) {
             (float)text->x,
             (float)text->y, // text internal position
             renderContext->renderWidth,
-            renderContext->renderHeight,             // Window Dimensions
-            renderContext->aspectRatio,              // aspect ratio
-            renderContext->appContext->displayScale, // display scale for high dpi screens
+            renderContext->renderHeight, // Window Dimensions
             position[0],
             position[1], // Text offset/position
+            0,
+            0,
             0,
             0, // padding
         },
@@ -171,7 +171,8 @@ void DrawText(RenderContext* renderContext, GPUText* text, float position[2]) {
             renderContext->renderPass,
             &(SDL_GPUBufferBinding){
                 .buffer = text->atlasses[i].indexBuffer->buffer,
-                .offset = 0},
+                .offset = 0,
+            },
             SDL_GPU_INDEXELEMENTSIZE_32BIT);
 
         SDL_BindGPUFragmentSamplers(
@@ -187,9 +188,84 @@ void DrawText(RenderContext* renderContext, GPUText* text, float position[2]) {
     }
 }
 
-/*
 void DrawInputContext(RenderContext* renderContext, InputContext* inputContext) {
-    DrawText(renderContext, &inputContext->gpuText, (float[2]){inputContext->layout.x, inputContext->layout.y});
+    SDL_BindGPUGraphicsPipeline(
+        renderContext->renderPass,
+        renderContext->appContext->builtinPipelines[BUILTIN_PIPELINE_TEXT]);
+
+    float offsetY = inputContext->layout.y;
+    for (int i = 0; i < inputContext->buffer.len; i++) {
+        TextRenderInfo currInfo = inputContext->buffer.arr[i].renderInfo;
+
+        if (currInfo.text->num_lines == 0) {
+            offsetY += inputContext->line_spacing;
+            continue;
+        }
+
+        SDL_PushGPUVertexUniformData(
+            renderContext->cmdbuf,
+            0,
+            (float[12]){
+                currInfo.textWidth,
+                currInfo.textHeight, // size
+                inputContext->layout.x,
+                offsetY, // position
+                renderContext->renderWidth,
+                renderContext->renderHeight, // Window Dimensions
+                0,
+                0, // offset can be 0
+                0,
+                0,
+                0,
+                0,
+            },
+            48);
+
+        SDL_PushGPUFragmentUniformData(
+            renderContext->cmdbuf,
+            0,
+            (float[4]){
+                inputContext->textColor[0],
+                inputContext->textColor[1],
+                inputContext->textColor[2],
+                inputContext->textColor[3],
+            },
+            16);
+
+        for (int j = 0; j < currInfo.sequence.len; j++) {
+            TextRenderInfoSequence currSequence = currInfo.sequence.arr[j];
+
+            SDL_BindGPUVertexBuffers(
+                renderContext->renderPass,
+                0,
+                (SDL_GPUBufferBinding[]){{
+                    .buffer = currSequence.vertexBuffer->buffer,
+                    .offset = 0,
+                }},
+                1);
+
+            SDL_BindGPUIndexBuffer(
+                renderContext->renderPass,
+                &(SDL_GPUBufferBinding){
+                    .buffer = currSequence.indexBuffer->buffer,
+                    .offset = 0,
+                },
+                SDL_GPU_INDEXELEMENTSIZE_32BIT);
+
+            SDL_BindGPUFragmentSamplers(
+                renderContext->renderPass,
+                0,
+                (SDL_GPUTextureSamplerBinding[]){{
+                    .sampler = renderContext->appContext->textSampler,
+                    .texture = currSequence.atlas,
+                }},
+                1);
+
+            SDL_DrawGPUIndexedPrimitives(renderContext->renderPass, currSequence.numIndices, 1, 0, 0, 0);
+        }
+
+        offsetY += inputContext->line_spacing;
+    }
 
     // Render the cursor here
 
@@ -225,5 +301,3 @@ void DrawInputContext(RenderContext* renderContext, InputContext* inputContext) 
 
     SDL_DrawGPUPrimitives(renderContext->renderPass, 6, 1, 0, 0);
 }
-
-*/

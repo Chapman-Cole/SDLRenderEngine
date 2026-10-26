@@ -38,7 +38,7 @@ static inline int _dynamic_array_grow(void* arrayStruct, DynamicArrayInfo* array
             *capacity += amount;
         }
 
-        void* temp_ptr = SDL_realloc(*arr, *capacity * arrayInfo->element_size);
+        void* temp_ptr = SDL_realloc(*arr, (*capacity) * arrayInfo->element_size);
         if (temp_ptr == NULL) {
             return false;
         }
@@ -99,27 +99,32 @@ static inline int _dynamic_array_shrink(void* arrayStruct, DynamicArrayInfo* arr
     (arrayStruct).len -= (arrayStruct).len == 0 ? 0 : 1;
 
 // When inserting a struct element, you will have to wrap inline declarations in parentheses
-#define DYNAMIC_ARRAY_INSERT(arrayStruct, index, element)                                                                                  \
-    _dynamic_array_grow(&(arrayStruct), &DYNAMIC_ARRAY_INFO((arrayStruct)), 1);                                                            \
-    SDL_memmove(&((arrayStruct).arr[index + 1]), &((arrayStruct).arr[index]), ((arrayStruct).len - index) * sizeof(*((arrayStruct).arr))); \
-    (arrayStruct).arr[index] = (element);                                                                                                  \
+#define DYNAMIC_ARRAY_INSERT(arrayStruct, index, element)                                                                                        \
+    _dynamic_array_grow(&(arrayStruct), &DYNAMIC_ARRAY_INFO((arrayStruct)), 1);                                                                  \
+    SDL_memmove(&((arrayStruct).arr[(index) + 1]), &((arrayStruct).arr[(index)]), ((arrayStruct).len - (index)) * sizeof(*((arrayStruct).arr))); \
+    (arrayStruct).arr[(index)] = (element);                                                                                                      \
     (arrayStruct).len++;
 
-#define DYNAMIC_ARRAY_REMOVE(arrayStruct, index)                                                                                               \
-    _dynamic_array_shrink(&(arrayStruct), &DYNAMIC_ARRAY_INFO((arrayStruct)), 1);                                                              \
-    SDL_memmove(&((arrayStruct).arr[index]), &((arrayStruct).arr[index + 1]), ((arrayStruct).len - index - 1) * sizeof(*((arrayStruct).arr))); \
+// For memory removal operations it is very important to only shrink the array after moving the data around, that way no index out of bounds
+// errors occur or any data is lost upon the resizing
+#define DYNAMIC_ARRAY_REMOVE(arrayStruct, index)                                                                                                     \
+    SDL_memmove(&((arrayStruct).arr[(index)]), &((arrayStruct).arr[(index) + 1]), ((arrayStruct).len - (index) - 1) * sizeof(*((arrayStruct).arr))); \
+    _dynamic_array_shrink(&(arrayStruct), &DYNAMIC_ARRAY_INFO((arrayStruct)), 1);                                                                    \
     (arrayStruct).len -= ((arrayStruct).len == 0 ? 0 : 1);
 
-#define DYNAMIC_ARRAY_REMOVE_SELECTION(arrayStruct, start, selection_len)                                                                \
-    _dynamic_array_shrink(&(arrayStruct), &DYNAMIC_ARRAY_INFO((arrayStruct)), selection_len);                                            \
-    SDL_memmove(&((arrayStruct).arr[start]), &((arrayStruct).arr[start + selection_len]), selection_len * sizeof(*((arrayStruct).arr))); \
-    (arrayStruct).len -= ((arrayStruct).len < selection_len ? 0 : selection_len);
+// For memory removal operations it is very important to only shrink the array after moving the data around, that way no index out of bounds
+// errors occur or any data is lost upon the resizing
+#define DYNAMIC_ARRAY_REMOVE_SELECTION(arrayStruct, start, selection_len)                                                                                                          \
+    SDL_memmove(&((arrayStruct).arr[(start)]), &((arrayStruct).arr[(start) + (selection_len)]), ((arrayStruct).len - ((start) + (selection_len))) * sizeof(*((arrayStruct).arr))); \
+    _dynamic_array_shrink(&(arrayStruct), &DYNAMIC_ARRAY_INFO((arrayStruct)), selection_len);                                                                                      \
+    (arrayStruct).len -= ((arrayStruct).len < (selection_len) ? 0 : (selection_len));
 
 // When declaring an inline struct for the src struct, you will have to wrap it in parentheses
 // the dst struct should not be declared inline since it is being directly modified
-#define DYNAMIC_ARRAY_INSERT_ARRAY(dst, src, index)                               \
-    _dynamic_array_grow(&(dst), &DYNAMIC_ARRAY_INFO((dst)), (src).len);           \
-    SDL_memcpy(&((dst).arr[index]), (src).arr, (src).len * sizeof(*((src).arr))); \
+#define DYNAMIC_ARRAY_INSERT_ARRAY(dst, src, index)                                                                      \
+    _dynamic_array_grow(&(dst), &DYNAMIC_ARRAY_INFO((dst)), (src).len);                                                  \
+    SDL_memmove(&((dst).arr[(index) + (src).len]), &((dst).arr[(index)]), ((dst).len - (index)) * sizeof(*((dst).arr))); \
+    SDL_memcpy(&((dst).arr[(index)]), (src).arr, (src).len * sizeof(*((src).arr)));                                      \
     (dst).len += (src).len;
 
 // Useful for when preserving the buffer is desired (typically for performance reasons since freeing and allocating memory is slow)

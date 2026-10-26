@@ -15,6 +15,7 @@ typedef struct TransferContextInfo {
     GPUBuffer* gpuBuffer;
     void* data;
     Uint32 dataSize;
+    Uint32 gpuBufferOffset;
     Uint32 tbIndex;
     Uint32 tbOffset;
 } TransferContextInfo;
@@ -61,6 +62,6 @@ TransferContextData GPUTransferContextAcquireStagingBuffer(GPUTransferContext* t
 
 // TransferContextData not acquired from GPUTransferContextAcquireStagingBuffer should be passed via the TRANSFER_CONTEXT_DATA
 // macro with the pointer (data) and size (data_size) respectively
-int GPUTransferContextUpload(GPUTransferContext* transferContext, GPUBuffer* gpuBuffer, TransferContextData data);
+int GPUTransferContextUpload(GPUTransferContext* transferContext, GPUBuffer* gpuBuffer, Uint32 gpuBufferOffset, TransferContextData data);
 
 #endif

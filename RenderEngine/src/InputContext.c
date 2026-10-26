@@ -10,15 +10,11 @@ static inline void text_render_info_init(TextRenderInfo* info, SDL_GPUDevice* de
         SDL_Log("Failed to create text object for TextRenderInfo: %s", SDL_GetError());
         info->text = NULL;
     }
-    info->vertexBuffer = NULL;
-    info->indexBuffer = NULL;
     DYNAMIC_ARRAY_INIT(info->sequence);
 }
 
 static inline void text_render_info_free(TextRenderInfo* info) {
     TTF_DestroyText(info->text);
-    GPUBuffer_unref(info->vertexBuffer);
-    GPUBuffer_unref(info->indexBuffer);
     DYNAMIC_ARRAY_FREE(info->sequence);
 }
 
@@ -40,12 +36,15 @@ static inline int get_utf8_width(Uint32 code) {
     }
 }
 
-static inline int InputContextGenerateBuffersForLine(SDL_GPUDevice* device, TextRenderInfo* renderInfo) {
-    DYNAMIC_ARRAY_CLEAR(renderInfo->sequence);
-    GPUBuffer_unref(renderInfo->vertexBuffer);
+static inline void text_line_init(TextLine* textLine, SDL_GPUDevice* device, TTF_TextEngine* textEngine, TTF_Font* font) {
+    DYNAMIC_ARRAY_INIT((*textLine));
+    text_render_info_init(&textLine->renderInfo, device, textEngine, font);
+    textLine->lineWasUpdated = false;
 }
 
-static inline int InputContextGenerateBuffers(InputContext* inputContext) {
+static inline void text_line_destroy(TextLine* textLine) {
+    DYNAMIC_ARRAY_FREE((*textLine));
+    text_render_info_free(&textLine->renderInfo);
 }
 
 int InputContextCreate(InputContext* inputContext, AppContext* appContext, TTF_Font* font, float textColor[4], float cursorColor[4], InputContextLayout layout) {
@@ -63,30 +62,33 @@ int InputContextCreate(InputContext* inputContext, AppContext* appContext, TTF_F
     inputContext->cursorColor[2] = cursorColor[2];
     inputContext->cursorColor[3] = cursorColor[3];
 
+    inputContext->app_context = appContext;
     inputContext->layout = layout;
 
     inputContext->flags &= ~INPUT_CONTEXT_BUFFER_WAS_MODIFIED;
     inputContext->flags &= ~INPUT_CONTEXT_CURSOR_WAS_MODIFIED;
     inputContext->flags &= ~INPUT_CONTEXT_LAYOUT_WAS_MODIFIED;
 
+    inputContext->line_spacing = TTF_GetFontHeight(font);
     inputContext->font = font;
 
     DYNAMIC_ARRAY_INIT(inputContext->buffer);
 
     TextLine firstLine;
     DYNAMIC_ARRAY_INIT(firstLine);
+    text_render_info_init(&firstLine.renderInfo, appContext->device, appContext->textEngine, font);
     DYNAMIC_ARRAY_APPEND(inputContext->buffer, firstLine);
-
-    DYNAMIC_ARRAY_INIT(inputContext->renderInfo);
-
-    TextRenderInfo renderInfoLine1;
-    text_render_info_init(&renderInfoLine1, inputContext->app_context->device, inputContext->app_context->textEngine, font);
-    DYNAMIC_ARRAY_APPEND(inputContext->renderInfo, renderInfoLine1);
 
     return 0;
 }
 
 int InputContextDestroy(InputContext* inputContext) {
+    for (int i = 0; i < inputContext->buffer.len; i++) {
+        DYNAMIC_ARRAY_FREE(inputContext->buffer.arr[i]);
+        text_render_info_free(&inputContext->buffer.arr[i].renderInfo);
+    }
+    DYNAMIC_ARRAY_FREE(inputContext->buffer);
+    return 0;
 }
 
 static inline int InputContextBufferInsert(InputContext* inputContext, char* text) {
@@ -180,11 +182,38 @@ static inline int InputContextGenTextWrap(InputContext* inputContext) {
 }
     */
 
+static inline int get_num_codepoints(char* string, int len_bytes) {
+    const char* string_copy = (const char*)string;
+    int tracker = 0;
+    int numCodePoints = 0;
+    while (tracker < len_bytes) {
+        Uint32 code = SDL_StepUTF8(&string_copy, NULL);
+        int code_width = get_utf8_width(code);
+        tracker += code_width;
+        numCodePoints++;
+    }
+    return numCodePoints;
+}
+
+static inline int get_byte_offset_from_codepoints(char* string, int num_codepoints) {
+    const char* string_copy = (const char*)string;
+    int numBytes = 0;
+    int codePointCount = 0;
+    while (codePointCount < num_codepoints) {
+        Uint32 code = SDL_StepUTF8(&string_copy, NULL);
+        int code_width = get_utf8_width(code);
+        numBytes += code_width;
+        codePointCount++;
+    }
+    return numBytes;
+}
+
 int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
     switch (event->type) {
     case SDL_EVENT_TEXT_INPUT: {
         InputContextBufferInsert(inputContext, (char*)event->text.text);
         inputContext->cursorIndex += SDL_strlen(event->text.text);
+        inputContext->buffer.arr[inputContext->cursorLine].lineWasUpdated = true;
         inputContext->flags |= INPUT_CONTEXT_BUFFER_WAS_MODIFIED;
     } break;
 
@@ -194,19 +223,22 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
         switch (event->key.key) {
         case SDLK_BACKSPACE: {
             if (inputContext->cursorIndex == 0 && inputContext->cursorLine > 0) {
-                DYNAMIC_ARRAY_INSERT_ARRAY(
-                    inputContext->buffer.arr[inputContext->cursorLine - 1],
-                    inputContext->buffer.arr[inputContext->cursorLine],
-                    inputContext->buffer.arr[inputContext->cursorLine - 1].len);
+                inputContext->buffer.arr[inputContext->cursorLine - 1].lineWasUpdated = true;
+                inputContext->cursorIndex = inputContext->buffer.arr[inputContext->cursorLine - 1].len;
 
+                if (inputContext->buffer.arr[inputContext->cursorLine].len > 0) {
+                    DYNAMIC_ARRAY_INSERT_ARRAY(
+                        inputContext->buffer.arr[inputContext->cursorLine - 1],
+                        inputContext->buffer.arr[inputContext->cursorLine],
+                        inputContext->buffer.arr[inputContext->cursorLine - 1].len);
+                }
+
+                text_line_destroy(&inputContext->buffer.arr[inputContext->cursorLine]);
                 DYNAMIC_ARRAY_REMOVE(inputContext->buffer, inputContext->cursorLine);
 
                 inputContext->cursorLine--;
                 if (inputContext->cursorLine < 0) {
                     inputContext->cursorLine = 0;
-                }
-                if (inputContext->cursorIndex > inputContext->buffer.arr[inputContext->cursorLine].len) {
-                    inputContext->cursorIndex = inputContext->buffer.arr[inputContext->cursorLine].len;
                 }
 
                 inputContext->flags |= INPUT_CONTEXT_BUFFER_WAS_MODIFIED;
@@ -215,26 +247,40 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
                 Uint32 code = SDL_StepBackUTF8(inputContext->buffer.arr[inputContext->cursorLine].arr, &indexStr);
                 Uint32 code_width = get_utf8_width(code);
 
-                DYNAMIC_ARRAY_REMOVE_SELECTION(inputContext->buffer.arr[inputContext->cursorLine], inputContext->cursorIndex, code_width);
+                DYNAMIC_ARRAY_REMOVE_SELECTION(inputContext->buffer.arr[inputContext->cursorLine], inputContext->cursorIndex - code_width, code_width);
                 inputContext->cursorIndex -= code_width;
                 if (inputContext->cursorIndex < 0) {
                     inputContext->cursorIndex = 0;
                 }
 
+                inputContext->buffer.arr[inputContext->cursorLine].lineWasUpdated = true;
                 inputContext->flags |= INPUT_CONTEXT_BUFFER_WAS_MODIFIED;
             }
         } break;
 
         case SDLK_RETURN: {
             TextLine newLine;
-            DYNAMIC_ARRAY_INIT(newLine);
+            text_line_init(&newLine, inputContext->app_context->device, inputContext->app_context->textEngine, inputContext->font);
+            if (inputContext->cursorIndex < inputContext->buffer.arr[inputContext->cursorLine].len) {
+                DYNAMIC_ARRAY_INSERT_ARRAY(
+                    newLine,
+                    ((TextLine){
+                        .arr = &inputContext->buffer.arr[inputContext->cursorLine].arr[inputContext->cursorIndex],
+                        .len = inputContext->buffer.arr[inputContext->cursorLine].len - inputContext->cursorIndex,
+                        .capacity = 0,
+                    }),
+                    0);
+                DYNAMIC_ARRAY_REMOVE_SELECTION(
+                    inputContext->buffer.arr[inputContext->cursorLine],
+                    inputContext->cursorIndex,
+                    inputContext->buffer.arr[inputContext->cursorLine].len - inputContext->cursorIndex);
+            }
+
             DYNAMIC_ARRAY_INSERT(inputContext->buffer, inputContext->cursorLine + 1, newLine);
 
-            TextRenderInfo newLineInfo;
-            text_render_info_init(&newLineInfo, inputContext->app_context->device, inputContext->app_context->textEngine, inputContext->font);
-            DYNAMIC_ARRAY_APPEND(inputContext->renderInfo, newLineInfo);
-
             inputContext->cursorLine++;
+            inputContext->cursorIndex = 0;
+            inputContext->buffer.arr[inputContext->cursorLine].lineWasUpdated = true;
             inputContext->flags |= INPUT_CONTEXT_BUFFER_WAS_MODIFIED;
         } break;
 
@@ -243,10 +289,12 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
             Uint32 code = SDL_StepBackUTF8(inputContext->buffer.arr[inputContext->cursorLine].arr, &indexStr);
             inputContext->cursorIndex -= get_utf8_width(code);
             if (inputContext->cursorIndex < 0) {
-                inputContext->cursorIndex = 0;
                 inputContext->cursorLine--;
                 if (inputContext->cursorLine < 0) {
                     inputContext->cursorLine = 0;
+                    inputContext->cursorIndex = 0;
+                } else {
+                    inputContext->cursorIndex = inputContext->buffer.arr[inputContext->cursorLine].len;
                 }
             }
             inputContext->flags |= INPUT_CONTEXT_CURSOR_WAS_MODIFIED;
@@ -257,7 +305,13 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
             Uint32 code = SDL_StepUTF8(&start, NULL);
             inputContext->cursorIndex += get_utf8_width(code);
             if (inputContext->cursorIndex > inputContext->buffer.arr[inputContext->cursorLine].len) {
-                inputContext->cursorIndex = inputContext->buffer.arr[inputContext->cursorLine].len;
+                inputContext->cursorLine++;
+                if (inputContext->cursorLine >= inputContext->buffer.len) {
+                    inputContext->cursorLine = inputContext->buffer.len - 1;
+                    inputContext->cursorIndex = inputContext->buffer.arr[inputContext->cursorLine].len;
+                } else {
+                    inputContext->cursorIndex = 0;
+                }
             }
             inputContext->flags |= INPUT_CONTEXT_CURSOR_WAS_MODIFIED;
         } break;
@@ -265,11 +319,16 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
         case SDLK_UP: {
             inputContext->cursorLine--;
             if (inputContext->cursorLine < 0) {
+                inputContext->cursorIndex = 0;
                 inputContext->cursorLine = 0;
-            }
-
-            if (inputContext->cursorIndex > inputContext->buffer.arr[inputContext->cursorLine].len) {
-                inputContext->cursorIndex = inputContext->buffer.arr[inputContext->cursorLine].len;
+            } else {
+                int prevLineCodePoints = get_num_codepoints(inputContext->buffer.arr[inputContext->cursorLine + 1].arr, inputContext->cursorIndex);
+                int currLineCodePoints = get_num_codepoints(inputContext->buffer.arr[inputContext->cursorLine].arr, inputContext->buffer.arr[inputContext->cursorLine].len);
+                if (prevLineCodePoints >= currLineCodePoints) {
+                    inputContext->cursorIndex = inputContext->buffer.arr[inputContext->cursorLine].len;
+                } else {
+                    inputContext->cursorIndex = get_byte_offset_from_codepoints(inputContext->buffer.arr[inputContext->cursorLine].arr, prevLineCodePoints);
+                }
             }
 
             inputContext->flags |= INPUT_CONTEXT_CURSOR_WAS_MODIFIED;
@@ -279,10 +338,15 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
             inputContext->cursorLine++;
             if (inputContext->cursorLine >= inputContext->buffer.len) {
                 inputContext->cursorLine = inputContext->buffer.len - 1;
-            }
-
-            if (inputContext->cursorLine == inputContext->buffer.len - 1) {
                 inputContext->cursorIndex = inputContext->buffer.arr[inputContext->cursorLine].len;
+            } else if (inputContext->cursorLine > 0) {
+                int prevLineCodePoints = get_num_codepoints(inputContext->buffer.arr[inputContext->cursorLine - 1].arr, inputContext->cursorIndex);
+                int currLineCodePoints = get_num_codepoints(inputContext->buffer.arr[inputContext->cursorLine].arr, inputContext->buffer.arr[inputContext->cursorLine].len);
+                if (prevLineCodePoints >= currLineCodePoints) {
+                    inputContext->cursorIndex = inputContext->buffer.arr[inputContext->cursorLine].len;
+                } else {
+                    inputContext->cursorIndex = get_byte_offset_from_codepoints(inputContext->buffer.arr[inputContext->cursorLine].arr, prevLineCodePoints);
+                }
             }
 
             inputContext->flags |= INPUT_CONTEXT_CURSOR_WAS_MODIFIED;
@@ -306,44 +370,105 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
     return 0;
 }
 
-static inline void InputContextGenerateGPUBuffers(InputContext* inputContext) {
+typedef struct TextVertex {
+    SDL_FPoint point;
+    SDL_FPoint tex;
+} TextVertex;
+
+static inline int InputContextGenerateGPUBuffersForLine(AppContext* app_context, TextRenderInfo* renderInfo) {
+    for (size_t i = 0; i < renderInfo->sequence.len; i++) {
+        GPUBuffer_unref(renderInfo->sequence.arr[i].vertexBuffer);
+        GPUBuffer_unref(renderInfo->sequence.arr[i].indexBuffer);
+    }
+    DYNAMIC_ARRAY_CLEAR(renderInfo->sequence);
+
+    TTF_GPUAtlasDrawSequence* sequence = TTF_GetGPUTextDrawData(renderInfo->text);
+    if (sequence == NULL) {
+        // NULL sequence means there is nothing to render
+        return 0;
+    }
+
+    Uint32 totalVerticesCount = 0;
+    Uint32 totalIndicesCount = 0;
+    TTF_GPUAtlasDrawSequence* sequenceCopy = sequence;
+    for (; sequenceCopy != NULL; sequenceCopy = sequenceCopy->next) {
+        totalVerticesCount += sequenceCopy->num_vertices;
+        totalIndicesCount += sequenceCopy->num_indices;
+    }
+
+    Uint32 vertexBufferOffsetTracker = 0;
+    Uint32 indexBufferOffsetTracker = 0;
+    for (; sequence != NULL; sequence = sequence->next) {
+        TextRenderInfoSequence textSequence;
+        textSequence.atlas = sequence->atlas_texture;
+        textSequence.numIndices = sequence->num_indices;
+        textSequence.vertexBuffer = GPUBuffer_create(app_context->device, &(SDL_GPUBufferCreateInfo){
+                                                                              .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+                                                                              .size = sequence->num_vertices * sizeof(TextVertex),
+                                                                              .props = 0,
+                                                                          });
+        textSequence.indexBuffer = GPUBuffer_create(app_context->device, &(SDL_GPUBufferCreateInfo){
+                                                                             .usage = SDL_GPU_BUFFERUSAGE_INDEX,
+                                                                             .size = sequence->num_indices * sizeof(int),
+                                                                             .props = 0,
+                                                                         });
+
+        TransferContextData vertexData = GPUTransferContextAcquireStagingBuffer(&app_context->transferContext, sequence->num_vertices * sizeof(TextVertex));
+        TransferContextData indexData = GPUTransferContextAcquireStagingBuffer(&app_context->transferContext, sequence->num_indices * sizeof(int));
+
+        TextVertex* vertices = vertexData.buffer;
+        int* indices = indexData.buffer;
+
+        for (int i = 0; i < sequence->num_vertices; i++) {
+            vertices[i] = (TextVertex){.point = sequence->xy[i], .tex = sequence->uv[i]};
+        }
+        SDL_memcpy(indices, sequence->indices, sequence->num_indices * sizeof(int));
+
+        GPUTransferContextUpload(&app_context->transferContext, textSequence.vertexBuffer, vertexBufferOffsetTracker, vertexData);
+        GPUTransferContextUpload(&app_context->transferContext, textSequence.indexBuffer, indexBufferOffsetTracker, indexData);
+
+        DYNAMIC_ARRAY_APPEND(renderInfo->sequence, textSequence);
+
+        vertexBufferOffsetTracker += sequence->num_vertices * sizeof(TextVertex);
+        indexBufferOffsetTracker += sequence->num_indices * sizeof(int);
+    }
+
+    return 0;
 }
 
 int InputContextRefresh(InputContext* inputContext) {
     if (inputContext->flags & INPUT_CONTEXT_BUFFER_WAS_MODIFIED || inputContext->flags & INPUT_CONTEXT_LAYOUT_WAS_MODIFIED) {
-        // InputContextGenTextWrap(inputContext);
+        for (int i = 0; i < inputContext->buffer.len; i++) {
+            if (inputContext->buffer.arr[i].lineWasUpdated = true) {
+                TextRenderInfo* currInfo = &inputContext->buffer.arr[i].renderInfo;
+                // Internally, the strings strings are not null terminated for the lines, which means passing
+                // a length of 0 to TTF_SetTextString will cause invalid reads since TTF_SetTextString assumes null
+                // terminated strings when the length parameter is 0
+                if (inputContext->buffer.arr[i].len == 0) {
+                    TTF_SetTextString(currInfo->text, "", 0);
+                } else {
+                    TTF_SetTextString(currInfo->text, inputContext->buffer.arr[i].arr, inputContext->buffer.arr[i].len);
+                }
+                TTF_GetTextSize(currInfo->text, &currInfo->textWidth, &currInfo->textHeight);
+                InputContextGenerateGPUBuffersForLine(inputContext->app_context, currInfo);
+
+                inputContext->buffer.arr[i].lineWasUpdated = false;
+            }
+        }
     }
 
     // Update cursor
-    /*
-    if (inputContext->bufferWasModified == true || inputContext->cursorWasModified) {
-        // The text could be a NULL pointer if it is set with an empty string, and get_num_newlines
-        // and prev_line_start_index can't handle NULL pointers
-        if (inputContext->gpuText.text->text == NULL) {
-            inputContext->cursorY = 0;
+    if (inputContext->flags & INPUT_CONTEXT_BUFFER_WAS_MODIFIED || inputContext->flags & INPUT_CONTEXT_CURSOR_WAS_MODIFIED) {
+        inputContext->cursorY = inputContext->cursorLine * inputContext->line_spacing;
+        int tempInt;
+        // If statement checks for 0 because the line strings are not null terminated and most of the TTF functions treat
+        // a length of 0 as meaning the string is null terminated
+        if (inputContext->cursorIndex == 0) {
             inputContext->cursorX = 0;
         } else {
-            int currLineStartIndex = prev_line_start_index(inputContext->gpuText.text->text, inputContext->cursorIndex);
-            const char* currLineStart = &inputContext->gpuText.text->text[currLineStartIndex];
-
-            // Can't pass in 0 to TTF_GetStringSize because the function uses that as an indication
-            // that it should treat it as a null terminated string, meaning it will screw up the x
-            // length because it will fill it with the x length of the whole string
-            if (inputContext->cursorIndex - currLineStartIndex <= 0) {
-                inputContext->cursorX = 0;
-            } else {
-                TTF_GetStringSize(
-                    inputContext->font,
-                    currLineStart,
-                    inputContext->cursorIndex - currLineStartIndex,
-                    &inputContext->cursorX,
-                    &inputContext->cursorY);
-            }
-
-            inputContext->cursorY = get_num_newlines(inputContext->gpuText.text->text, inputContext->cursorIndex) * inputContext->cursorHeight;
+            TTF_GetStringSize(inputContext->font, inputContext->buffer.arr[inputContext->cursorLine].arr, inputContext->cursorIndex, &inputContext->cursorX, &tempInt);
         }
     }
-        */
 
     inputContext->flags &= ~INPUT_CONTEXT_BUFFER_WAS_MODIFIED;
     inputContext->flags &= ~INPUT_CONTEXT_CURSOR_WAS_MODIFIED;

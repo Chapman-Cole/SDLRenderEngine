@@ -104,7 +104,7 @@ int GPUTransferContextSubmit(GPUTransferContext* transferContext) {
             },
             &(SDL_GPUBufferRegion){
                 .buffer = currInfo.gpuBuffer->buffer,
-                .offset = 0,
+                .offset = currInfo.gpuBufferOffset,
                 .size = currInfo.dataSize,
             },
             true // enable cycling so that in case the gpu buffer is actively bound
@@ -119,7 +119,7 @@ int GPUTransferContextSubmit(GPUTransferContext* transferContext) {
     }
 
     for (int i = 0; i < transferContext->contextInfo.len; i++) {
-        GPUBuffer_unref(transferContext->device, transferContext->contextInfo.arr[i].gpuBuffer);
+        GPUBuffer_unref(transferContext->contextInfo.arr[i].gpuBuffer);
     }
 
     DYNAMIC_ARRAY_CLEAR(transferContext->contextInfo);
@@ -136,7 +136,7 @@ TransferContextData GPUTransferContextAcquireStagingBuffer(GPUTransferContext* t
     return transferData;
 }
 
-int GPUTransferContextUpload(GPUTransferContext* transferContext, GPUBuffer* gpuBuffer, TransferContextData data) {
+int GPUTransferContextUpload(GPUTransferContext* transferContext, GPUBuffer* gpuBuffer, Uint32 gpuBufferOffset, TransferContextData data) {
     TransferContextInfo transferContextInfo = {0};
 
     for (int i = 0; i < transferContext->transferBuffers.len; i++) {
@@ -181,6 +181,7 @@ int GPUTransferContextUpload(GPUTransferContext* transferContext, GPUBuffer* gpu
 
     GPUBUFFER_ACQUIRE_REFERENCE(gpuBuffer);
     transferContextInfo.gpuBuffer = gpuBuffer;
+    transferContextInfo.gpuBufferOffset = gpuBufferOffset;
 
     if (data._stagingBuffer == true) {
         transferContextInfo.data = data.buffer;

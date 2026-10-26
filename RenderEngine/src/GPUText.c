@@ -31,10 +31,10 @@ static inline int generateGPUBuffers(GPUText* renderText, AppContext* appContext
     numAtlasses = 0;
     for (; sequence != NULL; sequence = sequence->next) {
         TransferContextData vertexData = GPUTransferContextAcquireStagingBuffer(&appContext->transferContext, sequence->num_vertices * sizeof(TextVertex));
-        TransferContextData fragmentData = GPUTransferContextAcquireStagingBuffer(&appContext->transferContext, sequence->num_indices * sizeof(int));
+        TransferContextData indexData = GPUTransferContextAcquireStagingBuffer(&appContext->transferContext, sequence->num_indices * sizeof(int));
 
         TextVertex* vertices = vertexData.buffer;
-        int* indices = fragmentData.buffer;
+        int* indices = indexData.buffer;
 
         for (int i = 0; i < sequence->num_vertices; i++) {
             vertices[i] = (TextVertex){.point = sequence->xy[i], .tex = sequence->uv[i]};
@@ -58,8 +58,8 @@ static inline int generateGPUBuffers(GPUText* renderText, AppContext* appContext
                                                                             .props = 0,
                                                                         });
 
-        GPUTransferContextUpload(&appContext->transferContext, textSequence.vertexBuffer, vertexData);
-        GPUTransferContextUpload(&appContext->transferContext, textSequence.indexBuffer, fragmentData);
+        GPUTransferContextUpload(&appContext->transferContext, textSequence.vertexBuffer, 0, vertexData);
+        GPUTransferContextUpload(&appContext->transferContext, textSequence.indexBuffer, 0, indexData);
 
         renderText->atlasses[numAtlasses] = textSequence;
 
