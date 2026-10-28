@@ -48,6 +48,7 @@ typedef struct TextLineArray {
 #define INPUT_CONTEXT_BUFFER_WAS_MODIFIED (1 << 0)
 #define INPUT_CONTEXT_CURSOR_WAS_MODIFIED (1 << 1)
 #define INPUT_CONTEXT_LAYOUT_WAS_MODIFIED (1 << 2)
+#define INPUT_CONTEXT_FONT_WAS_CHANGED (1 << 3)
 
 typedef struct InputContext {
     InputContextLayout layout;
@@ -83,6 +84,13 @@ int InputContextDestroy(InputContext* inputContext);
 static inline void InputContextUpdateLayout(InputContext* inputContext, InputContextLayout layout) {
     inputContext->layout = layout;
     inputContext->flags |= INPUT_CONTEXT_LAYOUT_WAS_MODIFIED;
+}
+
+static inline void InputContextSetFont(InputContext* inputContext, TTF_Font* font) {
+    inputContext->font = font;
+    inputContext->cursorHeight = TTF_GetFontHeight(font);
+    inputContext->line_spacing = inputContext->cursorHeight;
+    inputContext->flags |= INPUT_CONTEXT_FONT_WAS_CHANGED;
 }
 
 #endif

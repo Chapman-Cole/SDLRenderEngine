@@ -16,8 +16,7 @@ struct VertexUniformData {
     float2 size;
     float2 position;
     float2 windowDims;
-    float2 offset;
-    float4 pad;
+    float2 pad;
 };
 
 [[vk::binding(0,1)]] // SDL3 requires vertex uniform data to be in set 1
@@ -26,10 +25,10 @@ ConstantBuffer<VertexUniformData> vertexUniform : register(b0, space1);
 [shader("vertex")]
 VertexToFragment vertexMain(VertexStageInput vertexInput) {
     float2 tempPos = vertexInput.pos;
-    tempPos.x += vertexUniform.position.x + vertexUniform.offset.x;
+    tempPos.x += vertexUniform.position.x;
     // It is negative because the offset and position are relative to the top left corner (down is treated as positive),
     // while the vertex coordinates use the standard cartesian system where up is positive
-    tempPos.y += -vertexUniform.position.y - vertexUniform.offset.y;
+    tempPos.y += -vertexUniform.position.y;
 
     float pixelScaleX = (1.0 - (-1.0)) / vertexUniform.windowDims.x;
     float pixelScaleY = (1.0 - (-1.0)) / vertexUniform.windowDims.y;

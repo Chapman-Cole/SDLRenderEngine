@@ -11,7 +11,7 @@ struct FragmentStageOutput {
     float4 color;
 };
 
-struct VertexUniformData {
+struct VertexUniformData {  
     float2 position;
     float2 size;
     float2 windowDims;

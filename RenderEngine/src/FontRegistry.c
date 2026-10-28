@@ -19,6 +19,11 @@ static Uint32 fnv1a_hash(const char* identifier) {
 }
 
 int FontRegistrySet(FontRegistry* registry, const char* identifier, const char* path, float pts) {
+    TTF_Font* font_existance_test = FontRegistryGet(registry, identifier);
+    if (font_existance_test != NULL) {
+        return 0;
+    }
+
     Uint32 index = fnv1a_hash(identifier) & (FONT_REGISTRY_HASHMAP_LEN - 1);
 
     SDL_PropertiesID fontProps = SDL_CreateProperties();

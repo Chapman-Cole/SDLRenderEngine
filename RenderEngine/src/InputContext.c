@@ -65,9 +65,8 @@ int InputContextCreate(InputContext* inputContext, AppContext* appContext, TTF_F
     inputContext->app_context = appContext;
     inputContext->layout = layout;
 
-    inputContext->flags &= ~INPUT_CONTEXT_BUFFER_WAS_MODIFIED;
-    inputContext->flags &= ~INPUT_CONTEXT_CURSOR_WAS_MODIFIED;
-    inputContext->flags &= ~INPUT_CONTEXT_LAYOUT_WAS_MODIFIED;
+    // This will set all the flags to false initially
+    inputContext->flags = (uint32_t)(0);
 
     inputContext->line_spacing = TTF_GetFontHeight(font);
     inputContext->font = font;
@@ -91,9 +90,9 @@ int InputContextDestroy(InputContext* inputContext) {
     return 0;
 }
 
-static inline int InputContextBufferInsert(InputContext* inputContext, char* text) {
-    int textLen = SDL_strlen(text);
+static inline int InputContextBufferInsert(InputContext* inputContext, char* text, size_t textLen) {
     DYNAMIC_ARRAY_INSERT_ARRAY(inputContext->buffer.arr[inputContext->cursorLine], ((TextLine){.arr = text, .len = textLen, .capacity = 0}), inputContext->cursorIndex);
+    inputContext->cursorIndex += textLen;
     return 0;
 }
 
@@ -211,8 +210,7 @@ static inline int get_byte_offset_from_codepoints(char* string, int num_codepoin
 int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
     switch (event->type) {
     case SDL_EVENT_TEXT_INPUT: {
-        InputContextBufferInsert(inputContext, (char*)event->text.text);
-        inputContext->cursorIndex += SDL_strlen(event->text.text);
+        InputContextBufferInsert(inputContext, (char*)event->text.text, SDL_strlen(event->text.text));
         inputContext->buffer.arr[inputContext->cursorLine].lineWasUpdated = true;
         inputContext->flags |= INPUT_CONTEXT_BUFFER_WAS_MODIFIED;
     } break;
@@ -355,12 +353,55 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
         // Process ctrl + v for pasting
         case SDLK_V: {
             if (key_states[SDL_SCANCODE_LCTRL] == true) {
-                /* Multi line pastes will be challenging, so handle them later for now
                 char* clipboardText = SDL_GetClipboardText();
-                InputContextBufferInsert(inputContext, clipboardText);
+
+                const char* clipboardCopy = clipboardText;
+                Uint32 code = SDL_StepUTF8(&clipboardCopy, NULL);
+                int startByteOffset = 0;
+                int currByteOffset = 0;
+                while (code != SDL_INVALID_UNICODE_CODEPOINT) {
+                    int code_width = get_utf8_width(code);
+
+                    if (code == '\n') {
+                        InputContextBufferInsert(inputContext, &clipboardText[startByteOffset], currByteOffset - startByteOffset);
+                        inputContext->buffer.arr[inputContext->cursorLine].lineWasUpdated = true;
+
+                        TextLine newLine;
+                        text_line_init(&newLine, inputContext->app_context->device, inputContext->app_context->textEngine, inputContext->font);
+                        if (inputContext->cursorIndex < inputContext->buffer.arr[inputContext->cursorLine].len) {
+                            DYNAMIC_ARRAY_INSERT_ARRAY(
+                                newLine,
+                                ((TextLine){
+                                    .arr = &inputContext->buffer.arr[inputContext->cursorLine].arr[inputContext->cursorIndex],
+                                    .len = inputContext->buffer.arr[inputContext->cursorLine].len - inputContext->cursorIndex,
+                                    .capacity = 0,
+                                }),
+                                0);
+                            DYNAMIC_ARRAY_REMOVE_SELECTION(
+                                inputContext->buffer.arr[inputContext->cursorLine],
+                                inputContext->cursorIndex,
+                                inputContext->buffer.arr[inputContext->cursorLine].len - inputContext->cursorIndex);
+                        }
+
+                        DYNAMIC_ARRAY_INSERT(inputContext->buffer, inputContext->cursorLine + 1, newLine);
+
+                        inputContext->cursorLine++;
+                        inputContext->cursorIndex = 0;
+                        inputContext->buffer.arr[inputContext->cursorLine].lineWasUpdated = true;
+
+                        startByteOffset = currByteOffset + code_width;
+                    } else if (code == '\0') {
+                        InputContextBufferInsert(inputContext, &clipboardText[startByteOffset], currByteOffset - startByteOffset);
+                        inputContext->buffer.arr[inputContext->cursorLine].lineWasUpdated = true;
+                        break;
+                    }
+
+                    currByteOffset += code_width;
+                    code = SDL_StepUTF8(&clipboardCopy, NULL);
+                }
+
                 SDL_free(clipboardText);
-                bufferModified = true;
-                */
+                inputContext->flags |= INPUT_CONTEXT_BUFFER_WAS_MODIFIED;
             }
         }
         }
@@ -437,10 +478,21 @@ static inline int InputContextGenerateGPUBuffersForLine(AppContext* app_context,
 }
 
 int InputContextRefresh(InputContext* inputContext) {
-    if (inputContext->flags & INPUT_CONTEXT_BUFFER_WAS_MODIFIED || inputContext->flags & INPUT_CONTEXT_LAYOUT_WAS_MODIFIED) {
+    if (
+        inputContext->flags & INPUT_CONTEXT_BUFFER_WAS_MODIFIED || 
+        inputContext->flags & INPUT_CONTEXT_LAYOUT_WAS_MODIFIED ||
+        inputContext->flags & INPUT_CONTEXT_FONT_WAS_CHANGED
+    ) {
+        bool fontWasChanged = inputContext->flags & INPUT_CONTEXT_FONT_WAS_CHANGED;
         for (int i = 0; i < inputContext->buffer.len; i++) {
-            if (inputContext->buffer.arr[i].lineWasUpdated = true) {
+            // If the font was changed, every line needs to be updated to the new font
+            if (inputContext->buffer.arr[i].lineWasUpdated = true || fontWasChanged == true) {
                 TextRenderInfo* currInfo = &inputContext->buffer.arr[i].renderInfo;
+
+                if (fontWasChanged == true) {
+                    TTF_SetTextFont(currInfo->text, inputContext->font);
+                }
+
                 // Internally, the strings strings are not null terminated for the lines, which means passing
                 // a length of 0 to TTF_SetTextString will cause invalid reads since TTF_SetTextString assumes null
                 // terminated strings when the length parameter is 0
@@ -458,7 +510,11 @@ int InputContextRefresh(InputContext* inputContext) {
     }
 
     // Update cursor
-    if (inputContext->flags & INPUT_CONTEXT_BUFFER_WAS_MODIFIED || inputContext->flags & INPUT_CONTEXT_CURSOR_WAS_MODIFIED) {
+    if (
+        inputContext->flags & INPUT_CONTEXT_BUFFER_WAS_MODIFIED || 
+        inputContext->flags & INPUT_CONTEXT_CURSOR_WAS_MODIFIED || 
+        inputContext->flags & INPUT_CONTEXT_FONT_WAS_CHANGED
+    ) {
         inputContext->cursorY = inputContext->cursorLine * inputContext->line_spacing;
         int tempInt;
         // If statement checks for 0 because the line strings are not null terminated and most of the TTF functions treat
@@ -470,9 +526,8 @@ int InputContextRefresh(InputContext* inputContext) {
         }
     }
 
-    inputContext->flags &= ~INPUT_CONTEXT_BUFFER_WAS_MODIFIED;
-    inputContext->flags &= ~INPUT_CONTEXT_CURSOR_WAS_MODIFIED;
-    inputContext->flags &= ~INPUT_CONTEXT_LAYOUT_WAS_MODIFIED;
+    // This will reset all the flags to false
+    inputContext->flags = (uint32_t)(0);
 
     return 0;
 }

@@ -97,7 +97,7 @@ void ClayCompositorRenderCommands(ClayCompositor* clayCompositor, RenderContext*
                 extensionData->inputContext->layout.y = bounding_box.y;
                 extensionData->inputContext->layout.width = bounding_box.width;
                 extensionData->inputContext->layout.height = bounding_box.height;
-                //DrawInputContext(renderContext, extensionData->inputContext);
+                DrawInputContext(renderContext, extensionData->inputContext);
             } break;
             }
         }
