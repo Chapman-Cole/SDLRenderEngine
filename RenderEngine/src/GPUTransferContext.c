@@ -3,7 +3,7 @@
 #include <stddef.h>
 
 // It may be ideal to change this size later on, but for now
-// a megabyte should be a good transfer buffer size for each of them
+// a megabyte should be a good transfer buffer starting size
 #define TRANSFER_BUFFER_SIZE 1'000'000
 
 int GPUTransferContextCreate(GPUTransferContext* transferContext, SDL_GPUDevice* device, size_t arenaSize) {
@@ -144,7 +144,11 @@ int GPUTransferContextUpload(GPUTransferContext* transferContext, GPUBuffer* gpu
 
         if (i == transferContext->transferBuffers.len - 1 && currTbInfo.amountFilled + data.buffer_size > currTbInfo.bufferSize) {
             TransferBufferInfo tbInfo = {0};
-            tbInfo.bufferSize = TRANSFER_BUFFER_SIZE;
+            if (i > 0) {
+                tbInfo.bufferSize = SDL_max(2 * transferContext->transferBuffers.arr[i-1].bufferSize, data.buffer_size);
+            } else {
+                tbInfo.bufferSize = TRANSFER_BUFFER_SIZE;
+            }
             tbInfo.amountFilled = 0;
             tbInfo.transferBuffer = SDL_CreateGPUTransferBuffer(
                 transferContext->device,

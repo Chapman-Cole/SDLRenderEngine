@@ -32,6 +32,7 @@ typedef uint16_t FontRegistryKey;
 static inline int FontRegistryCreate(FontRegistry* registry, AppContext* appContext) {
     registry->appContext = appContext;
     SDL_zero(registry->hashmap);
+
     return 0;
 }
 

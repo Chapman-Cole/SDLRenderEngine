@@ -1,9 +1,25 @@
 #include "DrawFunctions.h"
+#include "InputContext.h"
 
 typedef struct float2 {
     float x;
     float y;
 } float2;
+
+typedef struct float3 {
+    union {
+        float x;
+        float r;
+    };
+    union {
+        float y;
+        float g;
+    };
+    union {
+        float z;
+        float b;
+    };
+} float3;
 
 typedef struct float4 {
     union {
@@ -33,6 +49,8 @@ typedef struct TextVertexUniform {
 
 typedef struct TextFragmentUniform {
     float4 color;
+    TextRenderInfoImageType imageType;
+    float3 pad;
 } TextFragmentUniform;
 
 typedef struct RectangleVertexUniform {
@@ -231,22 +249,22 @@ void DrawInputContext(RenderContext* renderContext, InputContext* inputContext) 
             .windowDims = (float2){renderContext->renderWidth, renderContext->renderHeight},
             .pad = {0},
         };
-
         SDL_PushGPUVertexUniformData(renderContext->cmdbuf, 0, &vertexUniform, sizeof(vertexUniform));
-
-        TextFragmentUniform fragmentUniform = (TextFragmentUniform){
-            .color = (float4){
-                inputContext->textColor[0],
-                inputContext->textColor[1],
-                inputContext->textColor[2],
-                inputContext->textColor[3],
-            },
-        };
-
-        SDL_PushGPUFragmentUniformData(renderContext->cmdbuf, 0, &fragmentUniform, sizeof(fragmentUniform));
 
         for (int j = 0; j < currInfo.sequence.len; j++) {
             TextRenderInfoSequence currSequence = currInfo.sequence.arr[j];
+
+            TextFragmentUniform fragmentUniform = (TextFragmentUniform){
+                .color = (float4){
+                    inputContext->textColor[0],
+                    inputContext->textColor[1],
+                    inputContext->textColor[2],
+                    inputContext->textColor[3],
+                },
+                .imageType = currSequence.imageType,
+                .pad = {0},
+            };
+            SDL_PushGPUFragmentUniformData(renderContext->cmdbuf, 0, &fragmentUniform, sizeof(fragmentUniform));
 
             SDL_BindGPUVertexBuffers(
                 renderContext->renderPass,

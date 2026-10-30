@@ -4,12 +4,13 @@
 #include <SDL3_ttf/SDL_ttf.h>
 #include <stdbool.h>
 
-static inline void text_render_info_init(TextRenderInfo* info, SDL_GPUDevice* device, TTF_TextEngine* textEngine, TTF_Font* font) {
-    info->text = TTF_CreateText(textEngine, font, "", 0);
+static inline void text_render_info_init(TextRenderInfo* info, InputContext* inputContext) {
+    info->text = TTF_CreateText(inputContext->app_context->textEngine, inputContext->font, "", 0);
     if (info->text == NULL) {
         SDL_Log("Failed to create text object for TextRenderInfo: %s", SDL_GetError());
         info->text = NULL;
     }
+    TTF_SetTextColorFloat(info->text, inputContext->textColor[0], inputContext->textColor[1], inputContext->textColor[2], inputContext->textColor[3]);
     DYNAMIC_ARRAY_INIT(info->sequence);
 }
 
@@ -36,9 +37,9 @@ static inline int get_utf8_width(Uint32 code) {
     }
 }
 
-static inline void text_line_init(TextLine* textLine, SDL_GPUDevice* device, TTF_TextEngine* textEngine, TTF_Font* font) {
+static inline void text_line_init(TextLine* textLine, InputContext* inputContext) {
     DYNAMIC_ARRAY_INIT((*textLine));
-    text_render_info_init(&textLine->renderInfo, device, textEngine, font);
+    text_render_info_init(&textLine->renderInfo, inputContext);
     textLine->lineWasUpdated = false;
 }
 
@@ -68,14 +69,15 @@ int InputContextCreate(InputContext* inputContext, AppContext* appContext, TTF_F
     // This will set all the flags to false initially
     inputContext->flags = (uint32_t)(0);
 
-    inputContext->line_spacing = TTF_GetFontHeight(font);
+    inputContext->line_spacing = TTF_GetFontLineSkip(font);
     inputContext->font = font;
 
     DYNAMIC_ARRAY_INIT(inputContext->buffer);
 
     TextLine firstLine;
     DYNAMIC_ARRAY_INIT(firstLine);
-    text_render_info_init(&firstLine.renderInfo, appContext->device, appContext->textEngine, font);
+    // Must initialize after all basic variables in inputContext are set
+    text_render_info_init(&firstLine.renderInfo, inputContext);
     DYNAMIC_ARRAY_APPEND(inputContext->buffer, firstLine);
 
     return 0;
@@ -258,7 +260,7 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
 
         case SDLK_RETURN: {
             TextLine newLine;
-            text_line_init(&newLine, inputContext->app_context->device, inputContext->app_context->textEngine, inputContext->font);
+            text_line_init(&newLine, inputContext);
             if (inputContext->cursorIndex < inputContext->buffer.arr[inputContext->cursorLine].len) {
                 DYNAMIC_ARRAY_INSERT_ARRAY(
                     newLine,
@@ -367,7 +369,7 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
                         inputContext->buffer.arr[inputContext->cursorLine].lineWasUpdated = true;
 
                         TextLine newLine;
-                        text_line_init(&newLine, inputContext->app_context->device, inputContext->app_context->textEngine, inputContext->font);
+                        text_line_init(&newLine, inputContext);
                         if (inputContext->cursorIndex < inputContext->buffer.arr[inputContext->cursorLine].len) {
                             DYNAMIC_ARRAY_INSERT_ARRAY(
                                 newLine,
@@ -429,18 +431,21 @@ static inline int InputContextGenerateGPUBuffersForLine(AppContext* app_context,
         return 0;
     }
 
-    Uint32 totalVerticesCount = 0;
-    Uint32 totalIndicesCount = 0;
-    TTF_GPUAtlasDrawSequence* sequenceCopy = sequence;
-    for (; sequenceCopy != NULL; sequenceCopy = sequenceCopy->next) {
-        totalVerticesCount += sequenceCopy->num_vertices;
-        totalIndicesCount += sequenceCopy->num_indices;
-    }
-
-    Uint32 vertexBufferOffsetTracker = 0;
-    Uint32 indexBufferOffsetTracker = 0;
     for (; sequence != NULL; sequence = sequence->next) {
         TextRenderInfoSequence textSequence;
+        switch (sequence->image_type) {
+        case TTF_IMAGE_ALPHA: {
+            textSequence.imageType = TEXT_RENDER_INFO_IMAGE_TYPE_ALPHA_ONLY;
+        } break;
+
+        case TTF_IMAGE_COLOR: {
+            textSequence.imageType = TEXT_RENDER_INFO_IMAGE_TYPE_COLOR;
+        } break;
+
+        default: {
+            textSequence.imageType = TEXT_RENDER_INFO_IMAGE_TYPE_ALPHA_ONLY;
+        }
+        }
         textSequence.atlas = sequence->atlas_texture;
         textSequence.numIndices = sequence->num_indices;
         textSequence.vertexBuffer = GPUBuffer_create(app_context->device, &(SDL_GPUBufferCreateInfo){
@@ -465,13 +470,10 @@ static inline int InputContextGenerateGPUBuffersForLine(AppContext* app_context,
         }
         SDL_memcpy(indices, sequence->indices, sequence->num_indices * sizeof(int));
 
-        GPUTransferContextUpload(&app_context->transferContext, textSequence.vertexBuffer, vertexBufferOffsetTracker, vertexData);
-        GPUTransferContextUpload(&app_context->transferContext, textSequence.indexBuffer, indexBufferOffsetTracker, indexData);
+        GPUTransferContextUpload(&app_context->transferContext, textSequence.vertexBuffer, 0, vertexData);
+        GPUTransferContextUpload(&app_context->transferContext, textSequence.indexBuffer, 0, indexData);
 
         DYNAMIC_ARRAY_APPEND(renderInfo->sequence, textSequence);
-
-        vertexBufferOffsetTracker += sequence->num_vertices * sizeof(TextVertex);
-        indexBufferOffsetTracker += sequence->num_indices * sizeof(int);
     }
 
     return 0;
@@ -479,13 +481,12 @@ static inline int InputContextGenerateGPUBuffersForLine(AppContext* app_context,
 
 int InputContextRefresh(InputContext* inputContext) {
     if (
-        inputContext->flags & INPUT_CONTEXT_BUFFER_WAS_MODIFIED || 
+        inputContext->flags & INPUT_CONTEXT_BUFFER_WAS_MODIFIED ||
         inputContext->flags & INPUT_CONTEXT_LAYOUT_WAS_MODIFIED ||
-        inputContext->flags & INPUT_CONTEXT_FONT_WAS_CHANGED
-    ) {
+        inputContext->flags & INPUT_CONTEXT_FONT_WAS_CHANGED) {
         bool fontWasChanged = inputContext->flags & INPUT_CONTEXT_FONT_WAS_CHANGED;
         for (int i = 0; i < inputContext->buffer.len; i++) {
-            // If the font was changed, every line needs to be updated to the new font
+            // If the font was changed, every line needs to be updated to the new font (same for when the base color changes)
             if (inputContext->buffer.arr[i].lineWasUpdated = true || fontWasChanged == true) {
                 TextRenderInfo* currInfo = &inputContext->buffer.arr[i].renderInfo;
 
@@ -511,10 +512,9 @@ int InputContextRefresh(InputContext* inputContext) {
 
     // Update cursor
     if (
-        inputContext->flags & INPUT_CONTEXT_BUFFER_WAS_MODIFIED || 
-        inputContext->flags & INPUT_CONTEXT_CURSOR_WAS_MODIFIED || 
-        inputContext->flags & INPUT_CONTEXT_FONT_WAS_CHANGED
-    ) {
+        inputContext->flags & INPUT_CONTEXT_BUFFER_WAS_MODIFIED ||
+        inputContext->flags & INPUT_CONTEXT_CURSOR_WAS_MODIFIED ||
+        inputContext->flags & INPUT_CONTEXT_FONT_WAS_CHANGED) {
         inputContext->cursorY = inputContext->cursorLine * inputContext->line_spacing;
         int tempInt;
         // If statement checks for 0 because the line strings are not null terminated and most of the TTF functions treat

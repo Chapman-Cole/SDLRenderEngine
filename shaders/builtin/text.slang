@@ -1,6 +1,8 @@
 struct VertexStageInput {
-    [[vk::location(0)]] float2 pos : TEXCOORD0;
-    [[vk::location(1)]] float2 uv : TEXCOORD1;
+    [[vk::location(0)]]
+    float2 pos : TEXCOORD0;
+    [[vk::location(1)]]
+    float2 uv : TEXCOORD1;
 };
 
 struct VertexToFragment {
@@ -19,7 +21,7 @@ struct VertexUniformData {
     float2 pad;
 };
 
-[[vk::binding(0,1)]] // SDL3 requires vertex uniform data to be in set 1
+[[vk::binding(0, 1)]] // SDL3 requires vertex uniform data to be in set 1
 ConstantBuffer<VertexUniformData> vertexUniform : register(b0, space1);
 
 [shader("vertex")]
@@ -45,21 +47,40 @@ VertexToFragment vertexMain(VertexStageInput vertexInput) {
     return output;
 }
 
+enum FragmentImageType {
+    ALPHA_ONLY,
+    COLOR,
+};
+
 struct FragmentUniformData {
     float4 color;
+    FragmentImageType image_type;
+    float3 pad;
 };
 
 [[vk::binding(0, 3)]] // SDL3 requires fragment uniform data to be in set 3
 ConstantBuffer<FragmentUniformData> fragmentUniform : register(b0, space3);
 
-[[vk::binding(0, 2)]] // SDL3 requires fragment sampler data to be in set 2
+[[vk::binding(0, 2)]]                                          // SDL3 requires fragment sampler data to be in set 2
 Sampler2D atlas : register(t0, space2) : register(s0, space2); // The registers are for compatibility with d3d12, which technically requires separate texture2D and SamplerState objects
-
-
 
 [shader("fragment")]
 FragmentStageOutput fragmentMain(VertexToFragment fragmentInput) : SV_Target {
     FragmentStageOutput output;
-    output.color = float4(fragmentUniform.color.rgb, min(fragmentUniform.color.a, atlas.Sample(fragmentInput.fragTex)).a);
+    // output.color = float4(fragmentUniform.color.rgb, min(fragmentUniform.color.a, atlas.Sample(fragmentInput.fragTex)).a);
+    switch (fragmentUniform.image_type) {
+    case FragmentImageType::ALPHA_ONLY: {
+        output.color = float4(fragmentUniform.color.rgb, atlas.Sample(fragmentInput.fragTex).a);
+    } break;
+
+    case FragmentImageType::COLOR: {
+        output.color = atlas.Sample(fragmentInput.fragTex);
+    } break;
+
+    default: {
+        // This means some sort of error occurred, so just make the text black as a basic default color
+        output.color = float4(0, 0, 0, 1.0);
+    }
+    }
     return output;
 }

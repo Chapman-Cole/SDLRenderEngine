@@ -16,6 +16,10 @@ static char fontNameNoExtension[256];
 static bool fontWasUpdated = false;
 static float file_dialog_font_size = 15.0f;
 
+static bool fallbackWasUpdated = false;
+static char fallbackNameNoExtensions[256];
+static char fallbackPath[256];
+
 static AppContext appContext = {0};
 static FontRegistry fontRegistry;
 static InputContext inputContext;
@@ -43,6 +47,8 @@ static void SDLCALL file_dialog_callback(void* userdata, const char* const* file
         return;
     }
 
+    SDL_LockMutex(fontMutex);
+
     const char* file = filelist[0];
     int file_len = SDL_strlen(file);
     int lastSlashIndex = -1; // -1 so that in the case there are no slashes, lastSlashIndex + 1 just evaluates to 0 in SDL_snprintf and the whole string is printed
@@ -57,10 +63,40 @@ static void SDLCALL file_dialog_callback(void* userdata, const char* const* file
 
     file_dialog_font_size = 15.0f;
 
-    SDL_LockMutex(fontMutex);
     fontWasUpdated = true;
-    SDL_snprintf(fontNameNoExtension, sizeof(fontNameNoExtension)/sizeof(fontNameNoExtension[0]), "%.*s%0.1f", lastPeriodIndex - (lastSlashIndex + 1), &file[lastSlashIndex + 1], file_dialog_font_size);
-    SDL_strlcpy(font_path, file, sizeof(font_path)/sizeof(font_path[0]));
+    SDL_snprintf(fontNameNoExtension, sizeof(fontNameNoExtension) / sizeof(fontNameNoExtension[0]), "%.*s%0.1f", lastPeriodIndex - (lastSlashIndex + 1), &file[lastSlashIndex + 1], file_dialog_font_size);
+    SDL_strlcpy(font_path, file, sizeof(font_path) / sizeof(font_path[0]));
+
+    SDL_UnlockMutex(fontMutex);
+}
+
+static void SDLCALL font_fallback_callback(void* userdata, const char* const* filelist, int filter) {
+    if (!filelist) {
+        SDL_Log("Failed to get font file: %s", SDL_GetError());
+        return;
+    } else if (*filelist == NULL) {
+        SDL_Log("No file selected.\n");
+        return;
+    }
+
+    const char* file = filelist[0];
+    int file_len = SDL_strlen(file);
+    int lastSlashIndex = -1;
+    int lastPeriodIndex = file_len;
+    for (int i = 0; i < file_len; i++) {
+        if (file[i] == '\\' || file[i] == '/') {
+            lastSlashIndex = i;
+        } else if (file[i] == '.') {
+            lastPeriodIndex = i;
+        }
+    }
+
+    SDL_LockMutex(fontMutex);
+
+    fallbackWasUpdated = true;
+    SDL_snprintf(fallbackNameNoExtensions, sizeof(fallbackNameNoExtensions) / sizeof(fallbackNameNoExtensions[0]), "%.*s%0.1f", lastPeriodIndex - (lastSlashIndex + 1), &file[lastSlashIndex + 1], file_dialog_font_size);
+    SDL_strlcpy(fallbackPath, file, sizeof(fallbackPath) / sizeof(fallbackPath[0]));
+
     SDL_UnlockMutex(fontMutex);
 }
 
@@ -90,6 +126,12 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
             fontWasUpdated = false;
             FontRegistrySet(&fontRegistry, fontNameNoExtension, font_path, file_dialog_font_size);
             InputContextSetFont(&inputContext, FontRegistryGet(&fontRegistry, fontNameNoExtension));
+        }
+
+        if (fallbackWasUpdated == true) {
+            fallbackWasUpdated = false;
+            FontRegistrySet(&fontRegistry, fallbackNameNoExtensions, fallbackPath, file_dialog_font_size);
+            TTF_AddFallbackFont(inputContext.font, FontRegistryGet(&fontRegistry, fallbackNameNoExtensions));
         }
         SDL_UnlockMutex(fontMutex);
     }
@@ -138,14 +180,23 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
     } else if (event->type == SDL_EVENT_KEY_DOWN) {
         const bool* key_states = SDL_GetKeyboardState(NULL);
         switch (event->key.key) {
-        case SDLK_O:
+        case SDLK_O: {
             if (key_states[SDL_SCANCODE_LCTRL] == true) {
                 SDL_ShowOpenFileDialog(
                     file_dialog_callback,
                     NULL,
                     appContext.window, dialogFilters, 2, NULL, false);
             }
-            break;
+        } break;
+
+        case SDLK_F: {
+            if (key_states[SDL_SCANCODE_LCTRL] == true) {
+                SDL_ShowOpenFileDialog(
+                    font_fallback_callback,
+                    NULL,
+                    appContext.window, dialogFilters, 2, NULL, false);
+            }
+        } break;
         }
     }
 

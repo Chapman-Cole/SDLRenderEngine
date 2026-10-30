@@ -4,11 +4,17 @@
 #include "AppContext.h"
 #include "SDL3_ttf/SDL_ttf.h"
 
+typedef enum TextRenderInfoImageType {
+    TEXT_RENDER_INFO_IMAGE_TYPE_ALPHA_ONLY,
+    TEXT_RENDER_INFO_IMAGE_TYPE_COLOR,
+} TextRenderInfoImageType;
+
 typedef struct TextRenderInfoSequence {
     SDL_GPUTexture* atlas;
     GPUBuffer* vertexBuffer;
     GPUBuffer* indexBuffer;
     Uint32 numIndices;
+    TextRenderInfoImageType imageType;
 } TextRenderInfoSequence;
 
 typedef struct TextRenderInfoSequenceArray {
@@ -89,8 +95,15 @@ static inline void InputContextUpdateLayout(InputContext* inputContext, InputCon
 static inline void InputContextSetFont(InputContext* inputContext, TTF_Font* font) {
     inputContext->font = font;
     inputContext->cursorHeight = TTF_GetFontHeight(font);
-    inputContext->line_spacing = inputContext->cursorHeight;
+    inputContext->line_spacing = TTF_GetFontLineSkip(font);
     inputContext->flags |= INPUT_CONTEXT_FONT_WAS_CHANGED;
+}
+
+static inline void InputContextSetTextColor(InputContext* inputContext, float color[4]) {
+    inputContext->textColor[0] = color[0];
+    inputContext->textColor[1] = color[1];
+    inputContext->textColor[2] = color[2];
+    inputContext->textColor[3] = color[3];
 }
 
 #endif
