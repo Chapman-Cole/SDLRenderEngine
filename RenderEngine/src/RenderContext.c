@@ -15,9 +15,8 @@ int RenderContextBegin(RenderContext* renderContext, AppContext* appContext, SDL
         return -1;
     }
 
-    Uint32 renderWidth, renderHeight;
     if (target == NULL) {
-        if (!SDL_WaitAndAcquireGPUSwapchainTexture(renderContext->cmdbuf, appContext->window, &renderContext->texture, &renderWidth, &renderHeight)) {
+        if (!SDL_WaitAndAcquireGPUSwapchainTexture(renderContext->cmdbuf, appContext->window, &renderContext->texture, &renderContext->renderWidth, &renderContext->renderHeight)) {
             SDL_Log("Failed to acquire swapchain: %s", SDL_GetError());
             SDL_CancelGPUCommandBuffer(renderContext->cmdbuf);
             return -1;
@@ -33,9 +32,7 @@ int RenderContextBegin(RenderContext* renderContext, AppContext* appContext, SDL
             renderContext->renderPass = SDL_BeginGPURenderPass(renderContext->cmdbuf, &colorTargetInfo, 1, NULL);
         }
 
-        renderContext->renderWidth = (float)renderWidth;
-        renderContext->renderHeight = (float)renderHeight;
-        renderContext->aspectRatio = renderContext->renderHeight / renderContext->renderWidth;
+        renderContext->aspectRatio = (float)renderContext->renderHeight / (float)renderContext->renderWidth;
     }
 
     return 0;

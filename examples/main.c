@@ -24,13 +24,9 @@ static AppContext appContext = {0};
 static FontRegistry fontRegistry;
 static InputContext inputContext;
 static GPUText fpsText;
+static GPUText fontNameText;
 
 SDL_Mutex* fontMutex;
-
-static const SDL_DialogFileFilter dialogFilters[] = {
-    {"TTF Files", "ttf"},
-    {"OTF Files", "otf"},
-};
 
 // This code is just based on the example from the SDL3 wiki: https://wiki.libsdl.org/SDL3/SDL_DialogFileCallback
 static void SDLCALL file_dialog_callback(void* userdata, const char* const* filelist, int filter) {
@@ -39,11 +35,6 @@ static void SDLCALL file_dialog_callback(void* userdata, const char* const* file
         return;
     } else if (*filelist == NULL) {
         SDL_Log("No file selected.\n");
-        return;
-    }
-
-    if (filter < 0) {
-        SDL_Log("Unsupported file type.\n");
         return;
     }
 
@@ -111,9 +102,11 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 
     SDL_StartTextInput(appContext.window);
 
-    InputContextCreate(&inputContext, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"), (float[4]){1.0, 1.0, 1.0, 1.0f}, (float[4]){1.0, 1.0, 1.0, 1.0f}, (InputContextLayout){.x = 100.0f, .y = 100.0f, .width = 2000.0f, .height = 1000.0f});
+    InputContextCreate(&inputContext, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"), (float[4]){1.0, 1.0, 1.0, 1.0f}, (float[4]){1.0, 1.0, 1.0, 1.0f}, (InputContextLayout){.x = 100, .y = 100, .width = 1000, .height = 1000});
+    InputContextSetLayoutMode(&inputContext, INPUT_CONTEXT_LAYOUT_MODE_BOUNDED_CUTOFF);
 
     GPUTextCreate(&fpsText, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"), "FPS:", 0, (float[4]){1.0, 1.0, 1.0, 1.0});
+    GPUTextCreate(&fontNameText, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"), "Font: Hack-Regular15", 0, (float[4]){1.0, 1.0, 1.0, 1.0});
 
     fontMutex = SDL_CreateMutex();
 
@@ -126,6 +119,10 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
             fontWasUpdated = false;
             FontRegistrySet(&fontRegistry, fontNameNoExtension, font_path, file_dialog_font_size);
             InputContextSetFont(&inputContext, FontRegistryGet(&fontRegistry, fontNameNoExtension));
+
+            char tempBuff[256];
+            SDL_snprintf(tempBuff, 256, "Font: %s", fontNameNoExtension);
+            GPUTextUpdate(&fontNameText, tempBuff, 0);
         }
 
         if (fallbackWasUpdated == true) {
@@ -167,6 +164,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     }
 
     DrawText(&renderContext, &fpsText, (float[2]){renderContext.renderWidth - fpsText.width, renderContext.renderHeight - fpsText.height});
+    DrawText(&renderContext, &fontNameText, (float[2]){0, renderContext.renderHeight - fontNameText.height});
     DrawInputContext(&renderContext, &inputContext);
 
     RenderContextEnd(&renderContext);
@@ -185,7 +183,7 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
                 SDL_ShowOpenFileDialog(
                     file_dialog_callback,
                     NULL,
-                    appContext.window, dialogFilters, 2, NULL, false);
+                    appContext.window, NULL, 0, NULL, false);
             }
         } break;
 
@@ -194,7 +192,7 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
                 SDL_ShowOpenFileDialog(
                     font_fallback_callback,
                     NULL,
-                    appContext.window, dialogFilters, 2, NULL, false);
+                    appContext.window, NULL, 0, NULL, false);
             }
         } break;
         }
@@ -209,6 +207,7 @@ void SDL_AppQuit(void* appstate, SDL_AppResult result) {
     SDL_DestroyMutex(fontMutex);
 
     GPUTextDestroy(&fpsText);
+    GPUTextDestroy(&fontNameText);
 
     InputContextDestroy(&inputContext);
 

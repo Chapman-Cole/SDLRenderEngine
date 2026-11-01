@@ -41,6 +41,10 @@ int GPUTransferContextDestroy(GPUTransferContext* transferContext) {
         SDL_ReleaseGPUTransferBuffer(transferContext->device, transferContext->transferBuffers.arr[i].transferBuffer);
     }
 
+    for (int i = 0; i < transferContext->contextInfo.len; i++) {
+        GPUBuffer_unref(transferContext->contextInfo.arr[i].gpuBuffer);
+    }
+
     DYNAMIC_ARRAY_FREE(transferContext->transferBuffers);
     DYNAMIC_ARRAY_FREE(transferContext->contextInfo);
     return 0;
@@ -145,7 +149,7 @@ int GPUTransferContextUpload(GPUTransferContext* transferContext, GPUBuffer* gpu
         if (i == transferContext->transferBuffers.len - 1 && currTbInfo.amountFilled + data.buffer_size > currTbInfo.bufferSize) {
             TransferBufferInfo tbInfo = {0};
             if (i > 0) {
-                tbInfo.bufferSize = SDL_max(2 * transferContext->transferBuffers.arr[i-1].bufferSize, data.buffer_size);
+                tbInfo.bufferSize = SDL_max(2 * transferContext->transferBuffers.arr[i - 1].bufferSize, data.buffer_size);
             } else {
                 tbInfo.bufferSize = TRANSFER_BUFFER_SIZE;
             }

@@ -230,72 +230,109 @@ void DrawText(RenderContext* renderContext, GPUText* text, float position[2]) {
 }
 
 void DrawInputContext(RenderContext* renderContext, InputContext* inputContext) {
+    bool scissorStateWasUpdated = false;
+    switch (inputContext->layoutMode) {
+    case INPUT_CONTEXT_LAYOUT_MODE_UNBOUNDED: {
+        // No need to set gpu scissor
+    } break;
+
+    case INPUT_CONTEXT_LAYOUT_MODE_BOUNDED_CUTOFF: {
+        scissorStateWasUpdated = true;
+        SDL_SetGPUScissor(
+            renderContext->renderPass,
+            &(SDL_Rect){
+                .x = (int)inputContext->layout.x,
+                .y = (int)inputContext->layout.y,
+                .w = (int)inputContext->layout.width,
+                .h = (int)inputContext->layout.height,
+            });
+    } break;
+
+    case INPUT_CONTEXT_LAYOUT_MODE_SCROLLABLE: {
+        scissorStateWasUpdated = true;
+        SDL_SetGPUScissor(
+            renderContext->renderPass,
+            &(SDL_Rect){
+                .x = (int)inputContext->layout.x,
+                .y = (int)inputContext->layout.y,
+                .w = (int)inputContext->layout.width,
+                .h = (int)inputContext->layout.height,
+            });
+    } break;
+
+    default: {
+        // By default don't set gpu scissor state
+    } break;
+    }
+
     SDL_BindGPUGraphicsPipeline(
         renderContext->renderPass,
         renderContext->appContext->builtinPipelines[BUILTIN_PIPELINE_TEXT]);
 
     float offsetY = inputContext->layout.y;
     for (int i = 0; i < inputContext->buffer.len; i++) {
-        TextRenderInfo currInfo = inputContext->buffer.arr[i].renderInfo;
+        for (int j = 0; j < inputContext->buffer.arr[i].renderInfo.len; j++) {
+            TextRenderInfo currInfo = inputContext->buffer.arr[i].renderInfo.arr[j];
 
-        if (currInfo.text->num_lines == 0) {
-            offsetY += inputContext->line_spacing;
-            continue;
-        }
+            if (currInfo.text->num_lines == 0) {
+                offsetY += inputContext->line_spacing;
+                continue;
+            }
 
-        TextVertexUniform vertexUniform = (TextVertexUniform){
-            .size = (float2){currInfo.textWidth, currInfo.textHeight},
-            .position = (float2){inputContext->layout.x, offsetY},
-            .windowDims = (float2){renderContext->renderWidth, renderContext->renderHeight},
-            .pad = {0},
-        };
-        SDL_PushGPUVertexUniformData(renderContext->cmdbuf, 0, &vertexUniform, sizeof(vertexUniform));
-
-        for (int j = 0; j < currInfo.sequence.len; j++) {
-            TextRenderInfoSequence currSequence = currInfo.sequence.arr[j];
-
-            TextFragmentUniform fragmentUniform = (TextFragmentUniform){
-                .color = (float4){
-                    inputContext->textColor[0],
-                    inputContext->textColor[1],
-                    inputContext->textColor[2],
-                    inputContext->textColor[3],
-                },
-                .imageType = currSequence.imageType,
+            TextVertexUniform vertexUniform = (TextVertexUniform){
+                .size = (float2){currInfo.textWidth, currInfo.textHeight},
+                .position = (float2){inputContext->layout.x, offsetY},
+                .windowDims = (float2){renderContext->renderWidth, renderContext->renderHeight},
                 .pad = {0},
             };
-            SDL_PushGPUFragmentUniformData(renderContext->cmdbuf, 0, &fragmentUniform, sizeof(fragmentUniform));
+            SDL_PushGPUVertexUniformData(renderContext->cmdbuf, 0, &vertexUniform, sizeof(vertexUniform));
 
-            SDL_BindGPUVertexBuffers(
-                renderContext->renderPass,
-                0,
-                (SDL_GPUBufferBinding[]){{
-                    .buffer = currSequence.vertexBuffer->buffer,
-                    .offset = 0,
-                }},
-                1);
+            for (int k = 0; k < currInfo.sequence.len; k++) {
+                TextRenderInfoSequence currSequence = currInfo.sequence.arr[k];
 
-            SDL_BindGPUIndexBuffer(
-                renderContext->renderPass,
-                &(SDL_GPUBufferBinding){
-                    .buffer = currSequence.indexBuffer->buffer,
-                    .offset = 0,
-                },
-                SDL_GPU_INDEXELEMENTSIZE_32BIT);
+                TextFragmentUniform fragmentUniform = (TextFragmentUniform){
+                    .color = (float4){
+                        inputContext->textColor[0],
+                        inputContext->textColor[1],
+                        inputContext->textColor[2],
+                        inputContext->textColor[3],
+                    },
+                    .imageType = currSequence.imageType,
+                    .pad = {0},
+                };
+                SDL_PushGPUFragmentUniformData(renderContext->cmdbuf, 0, &fragmentUniform, sizeof(fragmentUniform));
 
-            SDL_BindGPUFragmentSamplers(
-                renderContext->renderPass,
-                0,
-                (SDL_GPUTextureSamplerBinding[]){{
-                    .sampler = renderContext->appContext->textSampler,
-                    .texture = currSequence.atlas,
-                }},
-                1);
+                SDL_BindGPUVertexBuffers(
+                    renderContext->renderPass,
+                    0,
+                    (SDL_GPUBufferBinding[]){{
+                        .buffer = currSequence.vertexBuffer->buffer,
+                        .offset = 0,
+                    }},
+                    1);
 
-            SDL_DrawGPUIndexedPrimitives(renderContext->renderPass, currSequence.numIndices, 1, 0, 0, 0);
+                SDL_BindGPUIndexBuffer(
+                    renderContext->renderPass,
+                    &(SDL_GPUBufferBinding){
+                        .buffer = currSequence.indexBuffer->buffer,
+                        .offset = 0,
+                    },
+                    SDL_GPU_INDEXELEMENTSIZE_32BIT);
+
+                SDL_BindGPUFragmentSamplers(
+                    renderContext->renderPass,
+                    0,
+                    (SDL_GPUTextureSamplerBinding[]){{
+                        .sampler = renderContext->appContext->textSampler,
+                        .texture = currSequence.atlas,
+                    }},
+                    1);
+
+                SDL_DrawGPUIndexedPrimitives(renderContext->renderPass, currSequence.numIndices, 1, 0, 0, 0);
+            }
+
+            offsetY += inputContext->line_spacing;
         }
-
-        offsetY += inputContext->line_spacing;
     }
 
     // Render the cursor here
@@ -330,4 +367,16 @@ void DrawInputContext(RenderContext* renderContext, InputContext* inputContext) 
     SDL_PushGPUFragmentUniformData(renderContext->cmdbuf, 0, &cursorFragmentUniform, sizeof(cursorFragmentUniform));
 
     SDL_DrawGPUPrimitives(renderContext->renderPass, 6, 1, 0, 0);
+
+    if (scissorStateWasUpdated == true) {
+        // Make sure the scissor goes back to the size of the render target
+        SDL_SetGPUScissor(
+            renderContext->renderPass,
+            &(SDL_Rect){
+                .x = 0,
+                .y = 0,
+                .w = renderContext->renderWidth,
+                .h = renderContext->renderHeight,
+            });
+    }
 }

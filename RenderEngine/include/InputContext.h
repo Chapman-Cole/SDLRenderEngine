@@ -30,15 +30,21 @@ typedef struct TextRenderInfo {
     int textHeight;
 } TextRenderInfo;
 
+typedef struct TextRenderInfoArray {
+    TextRenderInfo* arr;
+    size_t len;
+    size_t capacity;
+} TextRenderInfoArray;
+
 typedef struct InputContextLayout {
-    float x;
-    float y;
-    float width;
-    float height;
+    int x;
+    int y;
+    int width;
+    int height;
 } InputContextLayout;
 
 typedef struct TextLine {
-    TextRenderInfo renderInfo;
+    TextRenderInfoArray renderInfo;
     char* arr;
     size_t len;
     size_t capacity;
@@ -56,6 +62,22 @@ typedef struct TextLineArray {
 #define INPUT_CONTEXT_LAYOUT_WAS_MODIFIED (1 << 2)
 #define INPUT_CONTEXT_FONT_WAS_CHANGED (1 << 3)
 
+typedef enum InputContextLayoutMode {
+    // Will ignore the width and height of the provided layout struct (offsets will still be used though)
+    INPUT_CONTEXT_LAYOUT_MODE_UNBOUNDED,
+
+    // only the horiztonal portion of the string that fits will be rendered
+    // only the lines that fit vertically in the bounds will be rendered
+    INPUT_CONTEXT_LAYOUT_MODE_BOUNDED_CUTOFF,
+
+    // Text will be cutoff, but the scroll offsets can be updated to get an offset view into the text
+    // buffer
+    INPUT_CONTEXT_LAYOUT_MODE_SCROLLABLE,
+
+    // Text will be wrapped according to the horizontal bounds of the layout
+    INPUT_CONTEXT_LAYOUT_MODE_WRAP,
+} InputContextLayoutMode;
+
 typedef struct InputContext {
     InputContextLayout layout;
     TextLineArray buffer;
@@ -63,19 +85,25 @@ typedef struct InputContext {
     AppContext* app_context;
     int cursorLine;
     int cursorIndex;
-    int cursorX;      // Used for rendering the cursor
-    int cursorY;      // Used for rendering the cursor
-    int cursorHeight; // Used for rendering the cursor
+    int cursorX;      
+    int cursorY;      
+    int cursorHeight; 
     int line_spacing;
     uint32_t flags;
     float textColor[4];
     float cursorColor[4];
+    InputContextLayoutMode layoutMode;
+    float scrollMaxHoriztonalOffset;
+    float scrollHorizontalOffset;
+    float scrollMaxVerticalOffset;
+    float scrollVerticalOffset;
 } InputContext;
 
 // For use with SDL_PollEvent (or inside SDL_AppEvent callback). Also make sure to call
-// SDL_StartTextInput before processing the SDL_EVENT_TEXT_ signals.
+// SDL_StartTextInput before processing the SDL_EVENT_TEXT signals.
 // The text color can be changed at any point after this by simply setting the textColor field of the struct
 // to the desired value. The same goes for the cursorColor.
+// defaults to INPUT_CONTEXT_LAYOUT_MODE_UNBOUNDED, but that can easily be updated with its corresponding function
 int InputContextCreate(InputContext* inputContext, AppContext* appContext, TTF_Font* font, float textColor[4], float cursorColor[4], InputContextLayout layout);
 
 // Must be called inside a while (SDL_PollEvent(&event)) event loop. It should not be put inside
@@ -104,6 +132,10 @@ static inline void InputContextSetTextColor(InputContext* inputContext, float co
     inputContext->textColor[1] = color[1];
     inputContext->textColor[2] = color[2];
     inputContext->textColor[3] = color[3];
+}
+
+static inline void InputContextSetLayoutMode(InputContext* inputContext, InputContextLayoutMode mode) {
+    inputContext->layoutMode = mode;
 }
 
 #endif

@@ -64,7 +64,8 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     FontRegistrySet(&fontRegistry, "Hack-Regular12", font_path, 12.0f);
     HackRegular12 = FontRegistryGenKey(&fontRegistry, "Hack-Regular12");
 
-    InputContextCreate(&inputContext, &appContext, FontRegistryGetWithKey(&fontRegistry, HackRegular12), (float[4]){1.0, 1.0, 1.0, 1.0}, (float[4]){1.0, 1.0, 1.0, 1.0}, (InputContextLayout){.x = 0, .y = 0, .width = 100.0f, .height = 100.0f});
+    InputContextCreate(&inputContext, &appContext, FontRegistryGetWithKey(&fontRegistry, HackRegular12), (float[4]){1.0, 1.0, 1.0, 1.0}, (float[4]){1.0, 1.0, 1.0, 1.0}, (InputContextLayout){.x = 0, .y = 0, .width = 100, .height = 100});
+    InputContextSetLayoutMode(&inputContext, INPUT_CONTEXT_LAYOUT_MODE_BOUNDED_CUTOFF);
 
     ClayCompositorCreate(&clayCompositor, &appContext, &fontRegistry);
 
@@ -100,7 +101,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
         CLAY(CLAY_ID("SideBar"), {.layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {.width = CLAY_SIZING_PERCENT(0.25), .height = CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 16}, .cornerRadius = {12.0, 12.0, 12.0, 12.0}, .backgroundColor = {25, 25, 25, 255}}) {
             CLAY(CLAY_ID("SideBarElement1"), sidebarItemConfig) {
                 static char buff1[200];
-                int buffLen = SDL_snprintf(buff1, 200, "(%.1f,%.1f)", inputContext.layout.width, inputContext.layout.height);
+                int buffLen = SDL_snprintf(buff1, 200, "(%d,%d)", inputContext.layout.width, inputContext.layout.height);
                 CLAY_TEXT(((Clay_String){.chars = buff1, .length = buffLen, .isStaticallyAllocated = false}), {.fontSize = 12, .fontId = HackRegular12, .textColor = {255, 255, 255, 255}});
             }
 
