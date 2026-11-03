@@ -65,7 +65,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     HackRegular12 = FontRegistryGenKey(&fontRegistry, "Hack-Regular12");
 
     InputContextCreate(&inputContext, &appContext, FontRegistryGetWithKey(&fontRegistry, HackRegular12), (float[4]){1.0, 1.0, 1.0, 1.0}, (float[4]){1.0, 1.0, 1.0, 1.0}, (InputContextLayout){.x = 0, .y = 0, .width = 100, .height = 100});
-    InputContextSetLayoutMode(&inputContext, INPUT_CONTEXT_LAYOUT_MODE_BOUNDED_CUTOFF);
+    InputContextSetLayoutMode(&inputContext, INPUT_CONTEXT_LAYOUT_MODE_WRAP);
 
     ClayCompositorCreate(&clayCompositor, &appContext, &fontRegistry);
 

@@ -116,8 +116,15 @@ int InputContextRefresh(InputContext* inputContext);
 int InputContextDestroy(InputContext* inputContext);
 
 static inline void InputContextUpdateLayout(InputContext* inputContext, InputContextLayout layout) {
-    inputContext->layout = layout;
-    inputContext->flags |= INPUT_CONTEXT_LAYOUT_WAS_MODIFIED;
+    if (
+        inputContext->layout.x != layout.x ||
+        inputContext->layout.y != layout.y ||
+        inputContext->layout.width != layout.width ||
+        inputContext->layout.height != layout.height
+    ) {
+        inputContext->flags |= INPUT_CONTEXT_LAYOUT_WAS_MODIFIED;
+        inputContext->layout = layout;
+    }
 }
 
 static inline void InputContextSetFont(InputContext* inputContext, TTF_Font* font) {

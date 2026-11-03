@@ -324,7 +324,7 @@ void DrawInputContext(RenderContext* renderContext, InputContext* inputContext) 
                     0,
                     (SDL_GPUTextureSamplerBinding[]){{
                         .sampler = renderContext->appContext->textSampler,
-                        .texture = currSequence.atlas,
+                        .texture = currSequence.atlas,  
                     }},
                     1);
 

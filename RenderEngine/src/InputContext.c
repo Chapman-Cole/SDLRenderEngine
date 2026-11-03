@@ -4,36 +4,38 @@
 #include <SDL3_ttf/SDL_ttf.h>
 #include <stdbool.h>
 
-static inline void text_render_info_array_init(TextRenderInfoArray* infoArray, InputContext* inputContext) {
-    TextRenderInfo info;
-    info.text = TTF_CreateText(inputContext->app_context->textEngine, inputContext->font, "", 0);
-    if (info.text == NULL) {
+static inline void text_render_info_init(TextRenderInfo* info, InputContext* inputContext) {
+    DYNAMIC_ARRAY_INIT(info->sequence);
+    info->text = TTF_CreateText(inputContext->app_context->textEngine, inputContext->font, "", 0);
+    if (info->text == NULL) {
         SDL_Log("Failed to create text object for TextRenderInfo: %s", SDL_GetError());
     }
-    DYNAMIC_ARRAY_INIT(info.sequence);
+    info->textWidth = 0;
+    info->textHeight = 0;
+}
 
+static inline void text_render_info_free(TextRenderInfo* info) {
+    TTF_DestroyText(info->text);
+    for (size_t i = 0; i < info->sequence.len; i++) {
+        GPUBuffer_unref(info->sequence.arr[i].vertexBuffer);
+        GPUBuffer_unref(info->sequence.arr[i].indexBuffer);
+    }
+    DYNAMIC_ARRAY_FREE(info->sequence);
+}
+
+static inline void text_render_info_array_init(TextRenderInfoArray* infoArray, InputContext* inputContext) {
+    TextRenderInfo info;
+    text_render_info_init(&info, inputContext);
     DYNAMIC_ARRAY_INIT((*infoArray));
     DYNAMIC_ARRAY_APPEND((*infoArray), info);
 }
 
 static inline void text_render_info_array_free(TextRenderInfoArray* infoArray) {
     for (int i = 0; i < infoArray->len; i++) {
-        TextRenderInfo currInfo = infoArray->arr[i];
-        TTF_DestroyText(currInfo.text);
-        for (int j = 0; j < currInfo.sequence.len; j++) {
-            GPUBuffer_unref(currInfo.sequence.arr[j].vertexBuffer);
-            GPUBuffer_unref(currInfo.sequence.arr[j].indexBuffer);
-        }
-        DYNAMIC_ARRAY_FREE(currInfo.sequence);
+        text_render_info_free(&infoArray->arr[i]);
     }
     DYNAMIC_ARRAY_FREE((*infoArray));
 }
-
-typedef struct IntArray {
-    int* arr;
-    size_t len;
-    size_t capacity;
-} IntArray;
 
 static inline void text_line_init(TextLine* textLine, InputContext* inputContext) {
     DYNAMIC_ARRAY_INIT((*textLine));
@@ -158,37 +160,180 @@ typedef struct StringSliceArray {
 // Takes in the given line index and breaks it down into however many are needed to fit within the bounds.
 // Specifically, this wraps by splitting up words unless there is only one word on the line, in which case
 // it will wrap by characters. The caller must free the array using DYNAMIC_ARRAY_FREE
-static inline void update_line_text_wrap(InputContext* inputContext, int lineIndex) {
-    DYNAMIC_ARRAY_FREE(inputContext->buffer.arr[lineIndex].renderInfo);
+static inline StringSliceArray get_line_text_wrap_slice_array(InputContext* inputContext, int lineIndex) {
+    StringSliceArray sliceArray;
+    DYNAMIC_ARRAY_INIT(sliceArray);
 
-    char* lineString = inputContext->buffer.arr[lineIndex].arr;
-    int lineStringLen = inputContext->buffer.arr[lineIndex].len;
+    StringSlice totalSlice = (StringSlice){.string = inputContext->buffer.arr[lineIndex].arr, .len = inputContext->buffer.arr[lineIndex].len};
 
     int layoutWidth = inputContext->layout.width;
 
     int lineWidth, lineHeight;
-    TTF_GetStringSize(inputContext->font, lineString, lineStringLen, &lineWidth, &lineHeight);
+    TTF_GetStringSize(inputContext->font, totalSlice.string, totalSlice.len, &lineWidth, &lineHeight);
 
     if (lineWidth <= layoutWidth) {
-        return;
+        DYNAMIC_ARRAY_APPEND(sliceArray, totalSlice);
+        return sliceArray;
     }
 
-    const char* line_copy = (const char*)lineString;
-    size_t psLen = lineStringLen;
-    int startByteOffset = 0;
+    char* line_copy = totalSlice.string;
+    size_t psLen = totalSlice.len;
+
     int currByteOffset = 0;
+    int prevWordOffset = 0;
+    int prevSliceWidth = 0;
     while (psLen > 0) {
         size_t psLenCopy = psLen;
-        Uint32 code = SDL_StepUTF8(&line_copy, &psLen);
+        Uint32 code = SDL_StepUTF8((const char**)&line_copy, &psLen);
         int code_width = psLenCopy - psLen;
-        currByteOffset += code_width;
+
+        // Need to check for psLen == 0 first because the last character could be a space,
+        // using else if would mean psLen == 0 would never be reached in that case
+        if (psLen == 0) {
+            int nextWordStart = currByteOffset + code_width;
+
+            int testWidth, testHeight;
+            TTF_GetStringSize(
+                inputContext->font, totalSlice.string,
+                nextWordStart, &testWidth, &testHeight);
+
+            if (testWidth > layoutWidth) {
+                if (prevSliceWidth == 0) {
+                    // In the case when there are no spaces to use to split up the string,
+                    // the string will just have to be split up by finding the character cutoff
+                    // for where it goes out of bounds
+
+                    int substringWidth, substringHeight;
+                    TTF_GetStringSize(inputContext->font, totalSlice.string, totalSlice.len, &substringWidth, &substringHeight);
+
+                    int byteOffsetTracker = totalSlice.len;
+                    const char* substringTracker = &totalSlice.string[totalSlice.len];
+                    while (substringWidth > layoutWidth && byteOffsetTracker > 0) {
+                        const char* substringTrackerCopy = substringTracker;
+                        Uint32 code = SDL_StepBackUTF8((const char*)totalSlice.string, &substringTracker);
+                        Uint32 code_width = (Uint32)(substringTrackerCopy - substringTracker);
+                        byteOffsetTracker -= code_width;
+                        TTF_GetStringSize(inputContext->font, totalSlice.string, byteOffsetTracker, &substringWidth, &substringHeight);
+                    }
+
+                    StringSlice currSlice = (StringSlice){.string = totalSlice.string, .len = byteOffsetTracker};
+                    DYNAMIC_ARRAY_APPEND(sliceArray, currSlice);
+                    totalSlice = (StringSlice){
+                        .string = &totalSlice.string[byteOffsetTracker],
+                        .len = totalSlice.len - byteOffsetTracker,
+                    };
+
+                    int totalSliceWidth, totalSliceHeight;
+                    if (totalSlice.len > 0) {
+                        // Since this is the end of the string, have to check to make the the second half
+                        // of the split string actually fits in the bounds
+                        TTF_GetStringSize(inputContext->font, totalSlice.string, totalSlice.len, &totalSliceWidth, &totalSliceHeight);
+                        if (totalSliceWidth > layoutWidth) {
+                            prevWordOffset = 0;
+                            prevSliceWidth = 0;
+                            currByteOffset = 0;
+                            psLen = totalSlice.len;
+                            line_copy = totalSlice.string;
+                            continue;
+                        } else {
+                            DYNAMIC_ARRAY_APPEND(sliceArray, totalSlice);
+                        }
+                    }
+                } else if (prevSliceWidth <= layoutWidth) {
+                    StringSlice currSlice = (StringSlice){.string = totalSlice.string, .len = prevWordOffset};
+                    DYNAMIC_ARRAY_APPEND(sliceArray, currSlice);
+                    currSlice = (StringSlice){.string = &totalSlice.string[prevWordOffset], .len = totalSlice.len - prevWordOffset};
+
+                    // Since this is the end of the string, must check to make sure the second half
+                    // of the split string actually fits in the bounds
+                    int currSliceWidth, currSliceHeight;
+                    if (currSlice.len > 0) {
+                        TTF_GetStringSize(inputContext->font, currSlice.string, currSlice.len, &currSliceWidth, &currSliceHeight);
+                        if (currSliceWidth > layoutWidth) {
+                            totalSlice = currSlice;
+                            prevWordOffset = 0;
+                            prevSliceWidth = 0;
+                            currByteOffset = 0;
+                            psLen = totalSlice.len;
+                            line_copy = totalSlice.string;
+                            continue;
+                        } else {
+                            DYNAMIC_ARRAY_APPEND(sliceArray, currSlice);
+                        }
+                    }
+                }
+            } else {
+                StringSlice currSlice = (StringSlice){.string = totalSlice.string, .len = totalSlice.len};
+                DYNAMIC_ARRAY_APPEND(sliceArray, currSlice);
+            }
+            break;
+        }
 
         if (code == ' ') {
+            int nextWordStart = currByteOffset + code_width;
+
             int testWidth, testHeight;
-            TTF_GetStringSize(inputContext->font, &lineString[startByteOffset], currByteOffset - startByteOffset, &testWidth, &testHeight);
-            startByteOffset = currByteOffset;
+            TTF_GetStringSize(
+                inputContext->font, totalSlice.string,
+                nextWordStart, &testWidth, &testHeight);
+
+            if (testWidth > layoutWidth) {
+                if (prevSliceWidth == 0) {
+                    // In the case when there are no spaces to use to split up the string,
+                    // the string will just have to be split up by finding the character cutoff
+                    // for where it goes out of bounds
+
+                    int substringWidth, substringHeight;
+                    TTF_GetStringSize(inputContext->font, totalSlice.string, totalSlice.len, &substringWidth, &substringHeight);
+
+                    int byteOffsetTracker = totalSlice.len;
+                    const char* substringTracker = &totalSlice.string[totalSlice.len - 1];
+                    while (substringWidth > layoutWidth && byteOffsetTracker > 0) {
+                        const char* substringTrackerCopy = substringTracker;
+                        Uint32 code = SDL_StepBackUTF8((const char*)totalSlice.string, &substringTracker);
+                        Uint32 code_width = (Uint32)(substringTrackerCopy - substringTracker);
+                        byteOffsetTracker -= code_width;
+                        TTF_GetStringSize(inputContext->font, totalSlice.string, byteOffsetTracker, &substringWidth, &substringHeight);
+                    }
+
+                    StringSlice currSlice = (StringSlice){.string = totalSlice.string, .len = byteOffsetTracker};
+                    DYNAMIC_ARRAY_APPEND(sliceArray, currSlice);
+                    totalSlice = (StringSlice){
+                        .string = &totalSlice.string[byteOffsetTracker],
+                        .len = totalSlice.len - byteOffsetTracker,
+                    };
+                    prevWordOffset = 0;
+                    prevSliceWidth = 0;
+                    currByteOffset = 0;
+                    psLen = totalSlice.len;
+                    line_copy = totalSlice.string;
+                    // Have to continue to prevent currByteOffset from be updated at the end of the loop
+                    continue;
+                } else if (prevSliceWidth <= layoutWidth) {
+                    StringSlice currSlice = (StringSlice){.string = totalSlice.string, .len = prevWordOffset};
+                    DYNAMIC_ARRAY_APPEND(sliceArray, currSlice);
+                    totalSlice = (StringSlice){
+                        .string = &totalSlice.string[prevWordOffset],
+                        .len = totalSlice.len - prevWordOffset,
+                    };
+                    prevWordOffset = 0;
+                    prevSliceWidth = 0;
+                    currByteOffset = 0;
+                    psLen = totalSlice.len;
+                    line_copy = totalSlice.string;
+                    // Have to continue to prevent currByteOffset from be updated at the end of the loop
+                    continue;
+                }
+            } else {
+                prevSliceWidth = testWidth;
+                prevWordOffset = nextWordStart;
+            }
         }
+
+        currByteOffset += code_width;
     }
+
+    return sliceArray;
 }
 
 int InputContextCreate(InputContext* inputContext, AppContext* appContext, TTF_Font* font, float textColor[4], float cursorColor[4], InputContextLayout layout) {
@@ -464,15 +609,40 @@ int InputContextRefresh(InputContext* inputContext) {
     if (
         inputContext->flags & INPUT_CONTEXT_BUFFER_WAS_MODIFIED ||
         inputContext->flags & INPUT_CONTEXT_LAYOUT_WAS_MODIFIED ||
-        inputContext->flags & INPUT_CONTEXT_FONT_WAS_CHANGED) {
+        inputContext->flags & INPUT_CONTEXT_FONT_WAS_CHANGED ||
+        ((inputContext->flags & INPUT_CONTEXT_LAYOUT_WAS_MODIFIED) &&
+         inputContext->layoutMode == INPUT_CONTEXT_LAYOUT_MODE_WRAP)) {
         bool fontWasChanged = inputContext->flags & INPUT_CONTEXT_FONT_WAS_CHANGED;
-        if (inputContext->layoutMode == INPUT_CONTEXT_LAYOUT_MODE_WRAP) {
-            // handle this later
-        } else {
-            for (int i = 0; i < inputContext->buffer.len; i++) {
-                // If the font was changed, every line needs to be updated to the new font (same for when the base color changes)
-                if (inputContext->buffer.arr[i].lineWasUpdated = true || fontWasChanged == true) {
-                    TextRenderInfo* currInfo = &inputContext->buffer.arr[i].renderInfo.arr[0];
+        for (int i = 0; i < inputContext->buffer.len; i++) {
+            // If the font was changed, every line needs to be updated to the new font (same for when the base color changes)
+            if (inputContext->buffer.arr[i].lineWasUpdated = true || fontWasChanged == true) {
+                StringSliceArray lineSlices = (StringSliceArray){
+                    .arr = (StringSlice[]){{
+                        .string = inputContext->buffer.arr[i].arr,
+                        .len = inputContext->buffer.arr[i].len,
+                    }},
+                    .len = 1,
+                    .capacity = 0,
+                };
+
+                if (inputContext->layoutMode == INPUT_CONTEXT_LAYOUT_MODE_WRAP) {
+                    lineSlices = get_line_text_wrap_slice_array(inputContext, i);
+
+                    while (inputContext->buffer.arr[i].renderInfo.len != lineSlices.len) {
+                        if (inputContext->buffer.arr[i].renderInfo.len < lineSlices.len) {
+                            TextRenderInfo currRenderInfo;
+                            text_render_info_init(&currRenderInfo, inputContext);
+                            DYNAMIC_ARRAY_APPEND(inputContext->buffer.arr[i].renderInfo, currRenderInfo);
+                        } else if (inputContext->buffer.arr[i].renderInfo.len > lineSlices.len) {
+                            TextRenderInfoArray* infoArray = &inputContext->buffer.arr[i].renderInfo;
+                            text_render_info_free(&infoArray->arr[infoArray->len - 1]);
+                            DYNAMIC_ARRAY_POP((*infoArray));
+                        }
+                    }
+                }
+
+                for (int j = 0; j < inputContext->buffer.arr[i].renderInfo.len; j++) {
+                    TextRenderInfo* currInfo = &inputContext->buffer.arr[i].renderInfo.arr[j];
 
                     if (fontWasChanged == true) {
                         TTF_SetTextFont(currInfo->text, inputContext->font);
@@ -481,15 +651,19 @@ int InputContextRefresh(InputContext* inputContext) {
                     // Internally, the strings strings are not null terminated for the lines, which means passing
                     // a length of 0 to TTF_SetTextString will cause invalid reads since TTF_SetTextString assumes null
                     // terminated strings when the length parameter is 0
-                    if (inputContext->buffer.arr[i].len == 0) {
+                    if (lineSlices.arr[j].len == 0) {
                         TTF_SetTextString(currInfo->text, "", 0);
                     } else {
-                        TTF_SetTextString(currInfo->text, inputContext->buffer.arr[i].arr, inputContext->buffer.arr[i].len);
+                        TTF_SetTextString(currInfo->text, lineSlices.arr[j].string, lineSlices.arr[j].len);
                     }
                     TTF_GetTextSize(currInfo->text, &currInfo->textWidth, &currInfo->textHeight);
                     InputContextGenerateGPUBuffersForLine(inputContext->app_context, currInfo);
 
                     inputContext->buffer.arr[i].lineWasUpdated = false;
+                }
+
+                if (inputContext->layoutMode == INPUT_CONTEXT_LAYOUT_MODE_WRAP) {
+                    DYNAMIC_ARRAY_FREE(lineSlices);
                 }
             }
         }
@@ -499,15 +673,47 @@ int InputContextRefresh(InputContext* inputContext) {
     if (
         inputContext->flags & INPUT_CONTEXT_BUFFER_WAS_MODIFIED ||
         inputContext->flags & INPUT_CONTEXT_CURSOR_WAS_MODIFIED ||
-        inputContext->flags & INPUT_CONTEXT_FONT_WAS_CHANGED) {
-        inputContext->cursorY = inputContext->cursorLine * inputContext->line_spacing;
+        inputContext->flags & INPUT_CONTEXT_FONT_WAS_CHANGED ||
+        ((inputContext->flags & INPUT_CONTEXT_LAYOUT_WAS_MODIFIED) &&
+         inputContext->layoutMode == INPUT_CONTEXT_LAYOUT_MODE_WRAP)) {
         int tempInt;
         // If statement checks for 0 because the line strings are not null terminated and most of the TTF functions treat
         // a length of 0 as meaning the string is null terminated
         if (inputContext->cursorIndex == 0) {
             inputContext->cursorX = 0;
+            inputContext->cursorY = 0;
+            for (int i = 0; i < inputContext->cursorLine; i++) {
+                for (size_t j = 0; j < inputContext->buffer.arr[i].renderInfo.len; j++) {
+                    inputContext->cursorY += inputContext->line_spacing;
+                }
+            }
         } else {
-            TTF_GetStringSize(inputContext->font, inputContext->buffer.arr[inputContext->cursorLine].arr, inputContext->cursorIndex, &inputContext->cursorX, &tempInt);
+            if (inputContext->layoutMode == INPUT_CONTEXT_LAYOUT_MODE_WRAP) {
+                StringSliceArray lineSlices = get_line_text_wrap_slice_array(inputContext, inputContext->cursorLine);
+
+                inputContext->cursorY = 0;
+                for (int i = 0; i < inputContext->cursorLine; i++) {
+                    for (size_t j = 0; j < inputContext->buffer.arr[i].renderInfo.len; j++) {
+                        inputContext->cursorY += inputContext->line_spacing;
+                    }
+                }
+
+                int indexTracker = inputContext->cursorIndex;
+                for (size_t i = 0; i < lineSlices.len; i++) {
+                    if (indexTracker <= lineSlices.arr[i].len) {
+                        TTF_GetStringSize(inputContext->font, lineSlices.arr[i].string, indexTracker, &inputContext->cursorX, &tempInt);
+                        break;
+                    } else {
+                        inputContext->cursorY += inputContext->line_spacing;
+                        indexTracker -= lineSlices.arr[i].len;
+                    }
+                }
+
+                DYNAMIC_ARRAY_FREE(lineSlices);
+            } else {
+                inputContext->cursorY = inputContext->cursorLine * inputContext->line_spacing;
+                TTF_GetStringSize(inputContext->font, inputContext->buffer.arr[inputContext->cursorLine].arr, inputContext->cursorIndex, &inputContext->cursorX, &tempInt);
+            }
         }
     }
 

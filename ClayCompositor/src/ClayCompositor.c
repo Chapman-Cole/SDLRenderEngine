@@ -93,10 +93,12 @@ void ClayCompositorRenderCommands(ClayCompositor* clayCompositor, RenderContext*
 
             switch (extensionData->type) {
             case COMPOSITOR_EXTENSION_TYPE_INPUT_CONTEXT: {
-                extensionData->inputContext->layout.x = bounding_box.x;
-                extensionData->inputContext->layout.y = bounding_box.y;
-                extensionData->inputContext->layout.width = bounding_box.width;
-                extensionData->inputContext->layout.height = bounding_box.height;
+                InputContextUpdateLayout(extensionData->inputContext, (InputContextLayout){
+                    .x = bounding_box.x,
+                    .y = bounding_box.y,
+                    .width = bounding_box.width,
+                    .height = bounding_box.height,
+                });
                 DrawInputContext(renderContext, extensionData->inputContext);
             } break;
             }
