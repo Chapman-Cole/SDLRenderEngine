@@ -5,7 +5,7 @@
 #define QUEUE_CAPACITY(size) ((size) >> 3)
 
 #define ALIGN_POINTER(ptr, alignAmount) \
-    (uintptr_t)(ptr) & (alignAmount - 1) == 0 ? (ptr) : (typeof(ptr))((uintptr_t)(ptr) - ((uintptr_t)(ptr) & (alignAmount - 1)) + alignAmount)
+    ((uintptr_t)(ptr) & (alignAmount - 1)) == 0 ? (ptr) : (typeof(ptr))((uintptr_t)(ptr) - ((uintptr_t)(ptr) & (alignAmount - 1)) + alignAmount)
 
 typedef struct QueueElement {
     uint8_t* ptr;

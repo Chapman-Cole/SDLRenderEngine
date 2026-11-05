@@ -3,7 +3,7 @@
 #include "SDL3/SDL.h"
 
 #define ALIGN_POINTER(ptr, alignAmount) \
-    (uintptr_t)(ptr) & (alignAmount - 1) == 0 ? (ptr) : (typeof(ptr))((uintptr_t)(ptr) - ((uintptr_t)(ptr) & (alignAmount - 1)) + alignAmount)
+    ((uintptr_t)(ptr) & (alignAmount - 1)) == 0 ? (ptr) : (typeof(ptr))((uintptr_t)(ptr) - ((uintptr_t)(ptr) & (alignAmount - 1)) + alignAmount)
 
 int MemoryArena_create(MemoryArena* arena, size_t size) {
     DYNAMIC_ARRAY_INIT((*arena));

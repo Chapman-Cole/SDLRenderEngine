@@ -41,6 +41,7 @@ static inline void text_line_init(TextLine* textLine, InputContext* inputContext
     DYNAMIC_ARRAY_INIT((*textLine));
     text_render_info_array_init(&textLine->renderInfo, inputContext);
     textLine->lineWasUpdated = false;
+    textLine->wrapState = TEXT_CURSOR_WRAP_STATE_UP;
 }
 
 static inline void text_line_destroy(TextLine* textLine) {
@@ -169,7 +170,11 @@ static inline StringSliceArray get_line_text_wrap_slice_array(InputContext* inpu
     int layoutWidth = inputContext->layout.width;
 
     int lineWidth, lineHeight;
-    TTF_GetStringSize(inputContext->font, totalSlice.string, totalSlice.len, &lineWidth, &lineHeight);
+    if (totalSlice.len > 0) {
+        TTF_GetStringSize(inputContext->font, totalSlice.string, totalSlice.len, &lineWidth, &lineHeight);
+    } else {
+        lineWidth = 0;
+    }
 
     if (lineWidth <= layoutWidth) {
         DYNAMIC_ARRAY_APPEND(sliceArray, totalSlice);
@@ -450,6 +455,8 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
                     inputContext->buffer.arr[inputContext->cursorLine],
                     inputContext->cursorIndex,
                     inputContext->buffer.arr[inputContext->cursorLine].len - inputContext->cursorIndex);
+
+                inputContext->buffer.arr[inputContext->cursorLine].lineWasUpdated = true;
             }
 
             DYNAMIC_ARRAY_INSERT(inputContext->buffer, inputContext->cursorLine + 1, newLine);
@@ -464,6 +471,19 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
             const char* indexStr = &inputContext->buffer.arr[inputContext->cursorLine].arr[inputContext->cursorIndex];
             const char* indexStrCopy = indexStr;
             Uint32 code = SDL_StepBackUTF8(inputContext->buffer.arr[inputContext->cursorLine].arr, &indexStr);
+
+            if (inputContext->layoutMode == INPUT_CONTEXT_LAYOUT_MODE_WRAP) {
+                if (
+                    inputContext->cursorIndex == inputContext->buffer.arr[inputContext->cursorLine].criticalIndex &&
+                    inputContext->buffer.arr[inputContext->cursorLine].wrapState == TEXT_CURSOR_WRAP_STATE_DOWN) {
+                    inputContext->buffer.arr[inputContext->cursorLine].wrapState = TEXT_CURSOR_WRAP_STATE_UP;
+                    inputContext->flags |= INPUT_CONTEXT_CURSOR_WAS_MODIFIED;
+                    break;
+                } else {
+                    inputContext->buffer.arr[inputContext->cursorLine].wrapState = TEXT_CURSOR_WRAP_STATE_DOWN;
+                }
+            }
+
             inputContext->cursorIndex -= (Uint32)(indexStrCopy - indexStr);
 
             if ((Uint32)(indexStrCopy - indexStr) == 0) {
@@ -483,6 +503,18 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
             size_t psLen = inputContext->buffer.arr[inputContext->cursorLine].len - inputContext->cursorIndex;
             size_t psLenCopy = psLen;
             Uint32 code = SDL_StepUTF8(&start, &psLen);
+
+            if (inputContext->layoutMode == INPUT_CONTEXT_LAYOUT_MODE_WRAP) {
+                if (
+                    inputContext->cursorIndex == inputContext->buffer.arr[inputContext->cursorLine].criticalIndex &&
+                    inputContext->buffer.arr[inputContext->cursorLine].wrapState == TEXT_CURSOR_WRAP_STATE_UP) {
+                    inputContext->buffer.arr[inputContext->cursorLine].wrapState = TEXT_CURSOR_WRAP_STATE_DOWN;
+                    inputContext->flags |= INPUT_CONTEXT_CURSOR_WAS_MODIFIED;
+                    break;
+                } else {
+                    inputContext->buffer.arr[inputContext->cursorLine].wrapState = TEXT_CURSOR_WRAP_STATE_UP;
+                }
+            }
 
             inputContext->cursorIndex += psLenCopy - psLen;
             if (psLenCopy - psLen == 0) {
@@ -597,7 +629,7 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
                 SDL_free(clipboardText);
                 inputContext->flags |= INPUT_CONTEXT_BUFFER_WAS_MODIFIED;
             }
-        }
+        } break;
         }
     } break;
     }
@@ -613,9 +645,14 @@ int InputContextRefresh(InputContext* inputContext) {
         ((inputContext->flags & INPUT_CONTEXT_LAYOUT_WAS_MODIFIED) &&
          inputContext->layoutMode == INPUT_CONTEXT_LAYOUT_MODE_WRAP)) {
         bool fontWasChanged = inputContext->flags & INPUT_CONTEXT_FONT_WAS_CHANGED;
+        bool textWrapAffectedByLayout = ((inputContext->flags & INPUT_CONTEXT_LAYOUT_WAS_MODIFIED) &&
+                                         inputContext->layoutMode == INPUT_CONTEXT_LAYOUT_MODE_WRAP);
         for (int i = 0; i < inputContext->buffer.len; i++) {
             // If the font was changed, every line needs to be updated to the new font (same for when the base color changes)
-            if (inputContext->buffer.arr[i].lineWasUpdated = true || fontWasChanged == true) {
+            if (
+                inputContext->buffer.arr[i].lineWasUpdated == true ||
+                fontWasChanged == true ||
+                textWrapAffectedByLayout == true) {
                 StringSliceArray lineSlices = (StringSliceArray){
                     .arr = (StringSlice[]){{
                         .string = inputContext->buffer.arr[i].arr,
@@ -699,13 +736,34 @@ int InputContextRefresh(InputContext* inputContext) {
                 }
 
                 int indexTracker = inputContext->cursorIndex;
+                int runningOffset = 0;
                 for (size_t i = 0; i < lineSlices.len; i++) {
                     if (indexTracker <= lineSlices.arr[i].len) {
-                        TTF_GetStringSize(inputContext->font, lineSlices.arr[i].string, indexTracker, &inputContext->cursorX, &tempInt);
+                        if (i < lineSlices.len - 1) {
+                            inputContext->buffer.arr[inputContext->cursorLine].criticalIndex = runningOffset + lineSlices.arr[i].len;
+                        } else {
+                            inputContext->buffer.arr[inputContext->cursorLine].criticalIndex = -1;
+                        }
+
+                        if (inputContext->cursorIndex == inputContext->buffer.arr[inputContext->cursorLine].criticalIndex) {
+                            switch (inputContext->buffer.arr[inputContext->cursorLine].wrapState) {
+                            case TEXT_CURSOR_WRAP_STATE_UP: {
+                                TTF_GetStringSize(inputContext->font, lineSlices.arr[i].string, lineSlices.arr[i].len, &inputContext->cursorX, &tempInt);
+                            } break;
+
+                            case TEXT_CURSOR_WRAP_STATE_DOWN: {
+                                inputContext->cursorX = 0;
+                                inputContext->cursorY += inputContext->line_spacing;
+                            } break;
+                            };
+                        } else {
+                            TTF_GetStringSize(inputContext->font, lineSlices.arr[i].string, indexTracker, &inputContext->cursorX, &tempInt);
+                        }
                         break;
                     } else {
                         inputContext->cursorY += inputContext->line_spacing;
                         indexTracker -= lineSlices.arr[i].len;
+                        runningOffset += lineSlices.arr[i].len;
                     }
                 }
 

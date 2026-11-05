@@ -43,11 +43,18 @@ typedef struct InputContextLayout {
     int height;
 } InputContextLayout;
 
+typedef enum TextCursorWrapState {
+    TEXT_CURSOR_WRAP_STATE_UP,
+    TEXT_CURSOR_WRAP_STATE_DOWN,
+} TextCursorWrapState;
+
 typedef struct TextLine {
     TextRenderInfoArray renderInfo;
     char* arr;
     size_t len;
     size_t capacity;
+    int criticalIndex;
+    TextCursorWrapState wrapState;
     bool lineWasUpdated;
 } TextLine;
 
@@ -85,9 +92,9 @@ typedef struct InputContext {
     AppContext* app_context;
     int cursorLine;
     int cursorIndex;
-    int cursorX;      
-    int cursorY;      
-    int cursorHeight; 
+    int cursorX;
+    int cursorY;
+    int cursorHeight;
     int line_spacing;
     uint32_t flags;
     float textColor[4];
@@ -120,8 +127,7 @@ static inline void InputContextUpdateLayout(InputContext* inputContext, InputCon
         inputContext->layout.x != layout.x ||
         inputContext->layout.y != layout.y ||
         inputContext->layout.width != layout.width ||
-        inputContext->layout.height != layout.height
-    ) {
+        inputContext->layout.height != layout.height) {
         inputContext->flags |= INPUT_CONTEXT_LAYOUT_WAS_MODIFIED;
         inputContext->layout = layout;
     }
