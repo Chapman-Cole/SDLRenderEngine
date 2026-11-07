@@ -857,13 +857,27 @@ int InputContextRefresh(InputContext* inputContext) {
         }
 
         if (inputContext->cursorY - inputContext->scrollVerticalOffset < 0) {
-            InputContextSetVerticalScrollOffset(inputContext, inputContext->scrollVerticalOffset - inputContext->line_spacing);
+            InputContextSetVerticalScrollOffset(inputContext, inputContext->cursorY);
         } else if (inputContext->cursorY - inputContext->scrollVerticalOffset > inputContext->layout.height - inputContext->line_spacing) {
             InputContextSetVerticalScrollOffset(inputContext, inputContext->scrollVerticalOffset + inputContext->line_spacing);
+            if (inputContext->cursorY - inputContext->scrollVerticalOffset > inputContext->layout.height - inputContext->line_spacing) {
+                InputContextSetVerticalScrollOffset(inputContext, (inputContext->cursorY / inputContext->layout.height) * inputContext->layout.height);
+            }
         }
 
         if (inputContext->cursorX - inputContext->scrollHorizontalOffset < 0) {
-            InputContextSetHorizontalScrollOffset(inputContext, inputContext->cursorX);
+            const char* string_copy = &inputContext->buffer.arr[inputContext->cursorLine].arr[inputContext->cursorIndex];
+            size_t psLen = inputContext->buffer.arr[inputContext->cursorLine].len - inputContext->cursorIndex;
+            Uint32 code = SDL_StepUTF8(&string_copy, &psLen);
+            char buff[5] = {0};
+            SDL_UCS4ToUTF8(code, buff);
+            int codeWidth, codeHeight;
+            TTF_GetStringSize(inputContext->font, buff, 0, &codeWidth, &codeHeight);
+            InputContextSetHorizontalScrollOffset(inputContext, inputContext->scrollHorizontalOffset - codeWidth);
+
+            if (inputContext->cursorX - inputContext->scrollHorizontalOffset < 0) {
+                InputContextSetHorizontalScrollOffset(inputContext, (inputContext->cursorX / inputContext->layout.width) * inputContext->layout.width);
+            }
         } else if (inputContext->cursorX - inputContext->scrollHorizontalOffset > inputContext->layout.width) {
             const char* string_copy = &inputContext->buffer.arr[inputContext->cursorLine].arr[inputContext->cursorIndex];
             Uint32 code = SDL_StepBackUTF8((const char*)inputContext->buffer.arr[inputContext->cursorLine].arr, &string_copy);

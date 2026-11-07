@@ -102,8 +102,8 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 
     SDL_StartTextInput(appContext.window);
 
-    InputContextCreate(&inputContext, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"), (float[4]){1.0, 1.0, 1.0, 1.0f}, (float[4]){1.0, 1.0, 1.0, 1.0f}, (InputContextLayout){.x = 100, .y = 100, .width = 1000, .height = 1000});
-    InputContextSetLayoutMode(&inputContext, INPUT_CONTEXT_LAYOUT_MODE_BOUNDED_CUTOFF);
+    InputContextCreate(&inputContext, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"), (float[4]){1.0, 1.0, 1.0, 1.0f}, (float[4]){1.0, 1.0, 1.0, 1.0f}, (InputContextLayout){.x = 0, .y = 0, .width = 1000, .height = 1000});
+    InputContextSetLayoutMode(&inputContext, INPUT_CONTEXT_LAYOUT_MODE_SCROLLABLE);
 
     GPUTextCreate(&fpsText, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"), "FPS:", 0, (float[4]){1.0, 1.0, 1.0, 1.0});
     GPUTextCreate(&fontNameText, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"), "Font: Hack-Regular15", 0, (float[4]){1.0, 1.0, 1.0, 1.0});
@@ -162,6 +162,8 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     if (RenderContextBegin(&renderContext, &appContext, NULL) < 0) {
         exit(-1);
     }
+
+    InputContextUpdateLayout(&inputContext, (InputContextLayout){.x = 0, .y = 0, .width = renderContext.renderWidth, .height = renderContext.renderHeight});
 
     DrawText(&renderContext, &fpsText, (float[2]){renderContext.renderWidth - fpsText.width, renderContext.renderHeight - fpsText.height});
     DrawText(&renderContext, &fontNameText, (float[2]){0, renderContext.renderHeight - fontNameText.height});
