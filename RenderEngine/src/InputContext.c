@@ -210,15 +210,38 @@ static inline StringSliceArray get_line_text_wrap_slice_array(InputContext* inpu
 
                     int substringWidth, substringHeight;
                     TTF_GetStringSize(inputContext->font, totalSlice.string, totalSlice.len, &substringWidth, &substringHeight);
+                    int prevSubstringWidth = substringWidth;
 
-                    int byteOffsetTracker = totalSlice.len;
-                    const char* substringTracker = &totalSlice.string[totalSlice.len];
-                    while (substringWidth > layoutWidth && byteOffsetTracker > 0) {
-                        const char* substringTrackerCopy = substringTracker;
-                        Uint32 code = SDL_StepBackUTF8((const char*)totalSlice.string, &substringTracker);
-                        Uint32 code_width = (Uint32)(substringTrackerCopy - substringTracker);
-                        byteOffsetTracker -= code_width;
-                        TTF_GetStringSize(inputContext->font, totalSlice.string, byteOffsetTracker, &substringWidth, &substringHeight);
+                    int estimatedNumCodepoints = substringWidth / TTF_GetFontHeight(inputContext->font);
+                    int byteOffsetTracker = get_byte_offset_from_codepoints(totalSlice.string, totalSlice.len, estimatedNumCodepoints);
+                    int prevByteOffsetTracker = byteOffsetTracker;
+                    const char* substringTracker = &totalSlice.string[byteOffsetTracker];
+
+                    for (;;) {
+                        prevSubstringWidth = substringWidth;
+                        prevByteOffsetTracker = byteOffsetTracker;
+                        if (substringWidth < layoutWidth) {
+                            size_t psLen = totalSlice.len - byteOffsetTracker;
+                            size_t psLenCopy = psLen;
+                            const char* stringCopy = totalSlice.string;
+                            Uint32 code = SDL_StepUTF8(&stringCopy, &psLen);
+                            Uint32 code_width = (Uint32)(psLenCopy - psLen);
+                            byteOffsetTracker += code_width;
+                            TTF_GetStringSize(inputContext->font, totalSlice.string, byteOffsetTracker, &substringWidth, &substringHeight);
+                        } else if (substringWidth > layoutWidth) {
+                            const char* substringTrackerCopy = substringTracker;
+                            Uint32 code = SDL_StepBackUTF8((const char*)totalSlice.string, &substringTracker);
+                            Uint32 code_width = (Uint32)(substringTrackerCopy - substringTracker);
+                            byteOffsetTracker -= code_width;
+                            TTF_GetStringSize(inputContext->font, totalSlice.string, byteOffsetTracker, &substringWidth, &substringHeight);
+                        } else {
+                            break;
+                        }
+
+                        if (prevSubstringWidth <= layoutWidth && substringWidth > layoutWidth) {
+                            byteOffsetTracker = prevByteOffsetTracker;
+                            break;
+                        }
                     }
 
                     StringSlice currSlice = (StringSlice){.string = totalSlice.string, .len = byteOffsetTracker};
@@ -290,15 +313,37 @@ static inline StringSliceArray get_line_text_wrap_slice_array(InputContext* inpu
 
                     int substringWidth, substringHeight;
                     TTF_GetStringSize(inputContext->font, totalSlice.string, totalSlice.len, &substringWidth, &substringHeight);
+                    int prevSubstringWidth = substringWidth;
 
-                    int byteOffsetTracker = totalSlice.len;
-                    const char* substringTracker = &totalSlice.string[totalSlice.len - 1];
-                    while (substringWidth > layoutWidth && byteOffsetTracker > 0) {
-                        const char* substringTrackerCopy = substringTracker;
-                        Uint32 code = SDL_StepBackUTF8((const char*)totalSlice.string, &substringTracker);
-                        Uint32 code_width = (Uint32)(substringTrackerCopy - substringTracker);
-                        byteOffsetTracker -= code_width;
-                        TTF_GetStringSize(inputContext->font, totalSlice.string, byteOffsetTracker, &substringWidth, &substringHeight);
+                    int estimatedNumCodepoints = substringWidth / TTF_GetFontHeight(inputContext->font);
+                    int byteOffsetTracker = get_byte_offset_from_codepoints(totalSlice.string, totalSlice.len, estimatedNumCodepoints);
+                    int prevByteOffsetTracker = byteOffsetTracker;
+                    const char* substringTracker = &totalSlice.string[byteOffsetTracker];
+                    for (;;) {
+                        prevSubstringWidth = substringWidth;
+                        prevByteOffsetTracker = byteOffsetTracker;
+                        if (substringWidth < layoutWidth) {
+                            size_t psLen = totalSlice.len - byteOffsetTracker;
+                            size_t psLenCopy = psLen;
+                            const char* stringCopy = totalSlice.string;
+                            Uint32 code = SDL_StepUTF8(&stringCopy, &psLen);
+                            Uint32 code_width = (Uint32)(psLenCopy - psLen);
+                            byteOffsetTracker += code_width;
+                            TTF_GetStringSize(inputContext->font, totalSlice.string, byteOffsetTracker, &substringWidth, &substringHeight);
+                        } else if (substringWidth > layoutWidth) {
+                            const char* substringTrackerCopy = substringTracker;
+                            Uint32 code = SDL_StepBackUTF8((const char*)totalSlice.string, &substringTracker);
+                            Uint32 code_width = (Uint32)(substringTrackerCopy - substringTracker);
+                            byteOffsetTracker -= code_width;
+                            TTF_GetStringSize(inputContext->font, totalSlice.string, byteOffsetTracker, &substringWidth, &substringHeight);
+                        } else {
+                            break;
+                        }
+
+                        if (prevSubstringWidth <= layoutWidth && substringWidth > layoutWidth) {
+                            byteOffsetTracker = prevByteOffsetTracker;
+                            break;
+                        }
                     }
 
                     StringSlice currSlice = (StringSlice){.string = totalSlice.string, .len = byteOffsetTracker};
@@ -355,6 +400,11 @@ int InputContextCreate(InputContext* inputContext, AppContext* appContext, TTF_F
     inputContext->cursorColor[1] = cursorColor[1];
     inputContext->cursorColor[2] = cursorColor[2];
     inputContext->cursorColor[3] = cursorColor[3];
+
+    inputContext->scrollHorizontalOffset = 0;
+    inputContext->scrollVerticalOffset = 0;
+
+    inputContext->tabWidth = 5;
 
     inputContext->app_context = appContext;
     inputContext->layout = layout;
@@ -571,6 +621,14 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
             inputContext->flags |= INPUT_CONTEXT_CURSOR_WAS_MODIFIED;
         } break;
 
+        case SDLK_TAB: {
+            for (int i = 0; i < inputContext->tabWidth; i++) {
+                InputContextBufferInsert(inputContext, " ", 1);
+            }
+            inputContext->buffer.arr[inputContext->cursorLine].lineWasUpdated = true;
+            inputContext->flags |= INPUT_CONTEXT_BUFFER_WAS_MODIFIED;
+        } break;
+
         // Process ctrl + v for pasting
         case SDLK_V: {
             if (key_states[SDL_SCANCODE_LCTRL] == true) {
@@ -644,6 +702,10 @@ int InputContextRefresh(InputContext* inputContext) {
         inputContext->flags & INPUT_CONTEXT_FONT_WAS_CHANGED ||
         ((inputContext->flags & INPUT_CONTEXT_LAYOUT_WAS_MODIFIED) &&
          inputContext->layoutMode == INPUT_CONTEXT_LAYOUT_MODE_WRAP)) {
+
+        inputContext->maxLineWidth = 0;
+        inputContext->maxHeight = 0;
+
         bool fontWasChanged = inputContext->flags & INPUT_CONTEXT_FONT_WAS_CHANGED;
         bool textWrapAffectedByLayout = ((inputContext->flags & INPUT_CONTEXT_LAYOUT_WAS_MODIFIED) &&
                                          inputContext->layoutMode == INPUT_CONTEXT_LAYOUT_MODE_WRAP);
@@ -653,6 +715,7 @@ int InputContextRefresh(InputContext* inputContext) {
                 inputContext->buffer.arr[i].lineWasUpdated == true ||
                 fontWasChanged == true ||
                 textWrapAffectedByLayout == true) {
+
                 StringSliceArray lineSlices = (StringSliceArray){
                     .arr = (StringSlice[]){{
                         .string = inputContext->buffer.arr[i].arr,
@@ -703,6 +766,25 @@ int InputContextRefresh(InputContext* inputContext) {
                     DYNAMIC_ARRAY_FREE(lineSlices);
                 }
             }
+
+            for (int j = 0; j < inputContext->buffer.arr[i].renderInfo.len; j++) {
+                inputContext->maxHeight += inputContext->line_spacing;
+                int textWidth, textHeight;
+                TTF_GetTextSize(inputContext->buffer.arr[i].renderInfo.arr[j].text, &textWidth, &textHeight);
+                if (textWidth > inputContext->maxLineWidth) {
+                    inputContext->maxLineWidth = textWidth;
+                }
+            }
+        }
+
+        inputContext->scrollMaxHorizontalOffset = inputContext->maxLineWidth - inputContext->layout.width;
+        if (inputContext->scrollMaxHorizontalOffset < 0) {
+            inputContext->scrollMaxHorizontalOffset = 0;
+        }
+
+        inputContext->scrollMaxVerticalOffset = inputContext->maxHeight - inputContext->layout.height;
+        if (inputContext->scrollMaxVerticalOffset < 0) {
+            inputContext->scrollMaxVerticalOffset = 0;
         }
     }
 
@@ -771,6 +853,28 @@ int InputContextRefresh(InputContext* inputContext) {
             } else {
                 inputContext->cursorY = inputContext->cursorLine * inputContext->line_spacing;
                 TTF_GetStringSize(inputContext->font, inputContext->buffer.arr[inputContext->cursorLine].arr, inputContext->cursorIndex, &inputContext->cursorX, &tempInt);
+            }
+        }
+
+        if (inputContext->cursorY - inputContext->scrollVerticalOffset < 0) {
+            InputContextSetVerticalScrollOffset(inputContext, inputContext->scrollVerticalOffset - inputContext->line_spacing);
+        } else if (inputContext->cursorY - inputContext->scrollVerticalOffset > inputContext->layout.height - inputContext->line_spacing) {
+            InputContextSetVerticalScrollOffset(inputContext, inputContext->scrollVerticalOffset + inputContext->line_spacing);
+        }
+
+        if (inputContext->cursorX - inputContext->scrollHorizontalOffset < 0) {
+            InputContextSetHorizontalScrollOffset(inputContext, inputContext->cursorX);
+        } else if (inputContext->cursorX - inputContext->scrollHorizontalOffset > inputContext->layout.width) {
+            const char* string_copy = &inputContext->buffer.arr[inputContext->cursorLine].arr[inputContext->cursorIndex];
+            Uint32 code = SDL_StepBackUTF8((const char*)inputContext->buffer.arr[inputContext->cursorLine].arr, &string_copy);
+            char buff[5] = {0};
+            SDL_UCS4ToUTF8(code, buff);
+            int codeWidth, codeHeight;
+            TTF_GetStringSize(inputContext->font, buff, 0, &codeWidth, &codeHeight);
+            InputContextSetHorizontalScrollOffset(inputContext, inputContext->scrollHorizontalOffset + codeWidth);
+
+            if (inputContext->cursorX - inputContext->scrollHorizontalOffset > inputContext->layout.width) {
+                InputContextSetHorizontalScrollOffset(inputContext, (inputContext->cursorX / inputContext->layout.width) * inputContext->layout.width);
             }
         }
     }

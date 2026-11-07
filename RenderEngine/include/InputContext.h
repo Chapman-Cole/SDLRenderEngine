@@ -100,7 +100,10 @@ typedef struct InputContext {
     float textColor[4];
     float cursorColor[4];
     InputContextLayoutMode layoutMode;
-    float scrollMaxHoriztonalOffset;
+    int tabWidth;
+    int maxLineWidth;
+    int maxHeight;
+    float scrollMaxHorizontalOffset;
     float scrollHorizontalOffset;
     float scrollMaxVerticalOffset;
     float scrollVerticalOffset;
@@ -149,6 +152,18 @@ static inline void InputContextSetTextColor(InputContext* inputContext, float co
 
 static inline void InputContextSetLayoutMode(InputContext* inputContext, InputContextLayoutMode mode) {
     inputContext->layoutMode = mode;
+}
+
+static inline void InputContextSetHorizontalScrollOffset(InputContext* inputContext, int h_scroll_amount) {
+    inputContext->scrollHorizontalOffset = SDL_clamp(h_scroll_amount, 0, 11 * inputContext->scrollMaxHorizontalOffset / 8);
+}
+
+static inline void InputContextSetVerticalScrollOffset(InputContext* inputContext, int v_scroll_amount) {
+    inputContext->scrollVerticalOffset = SDL_clamp(v_scroll_amount, 0, 11 * inputContext->scrollMaxVerticalOffset / 8);
+}
+
+static inline void InputContextSetTabWidth(InputContext* inputContext, int tabWidth) {
+    inputContext->tabWidth = tabWidth;
 }
 
 #endif

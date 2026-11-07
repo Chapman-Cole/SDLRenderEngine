@@ -258,6 +258,7 @@ void DrawInputContext(RenderContext* renderContext, InputContext* inputContext) 
                 .w = (int)inputContext->layout.width,
                 .h = (int)inputContext->layout.height,
             });
+
     } break;
 
     default: {
@@ -269,8 +270,19 @@ void DrawInputContext(RenderContext* renderContext, InputContext* inputContext) 
         renderContext->renderPass,
         renderContext->appContext->builtinPipelines[BUILTIN_PIPELINE_TEXT]);
 
-    float offsetY = inputContext->layout.y;
+    int offsetY = inputContext->layout.y;
     for (int i = 0; i < inputContext->buffer.len; i++) {
+        if (offsetY - inputContext->scrollVerticalOffset < -inputContext->line_spacing) {
+            for (int j = 0; j < inputContext->buffer.arr[i].renderInfo.len; j++) {
+                offsetY += inputContext->line_spacing;
+            }
+            continue;
+        }
+
+        if (offsetY - inputContext->scrollVerticalOffset > inputContext->layout.height + inputContext->line_spacing) {
+            break;
+        }
+
         for (int j = 0; j < inputContext->buffer.arr[i].renderInfo.len; j++) {
             TextRenderInfo currInfo = inputContext->buffer.arr[i].renderInfo.arr[j];
 
@@ -281,7 +293,10 @@ void DrawInputContext(RenderContext* renderContext, InputContext* inputContext) 
 
             TextVertexUniform vertexUniform = (TextVertexUniform){
                 .size = (float2){currInfo.textWidth, currInfo.textHeight},
-                .position = (float2){inputContext->layout.x, offsetY},
+                .position = (float2){
+                    inputContext->layout.x - inputContext->scrollHorizontalOffset,
+                    offsetY - inputContext->scrollVerticalOffset,
+                },
                 .windowDims = (float2){renderContext->renderWidth, renderContext->renderHeight},
                 .pad = {0},
             };
@@ -324,7 +339,7 @@ void DrawInputContext(RenderContext* renderContext, InputContext* inputContext) 
                     0,
                     (SDL_GPUTextureSamplerBinding[]){{
                         .sampler = renderContext->appContext->textSampler,
-                        .texture = currSequence.atlas,  
+                        .texture = currSequence.atlas,
                     }},
                     1);
 
@@ -345,8 +360,8 @@ void DrawInputContext(RenderContext* renderContext, InputContext* inputContext) 
 
     TextCursorVertexUniform cursorVertexUniform = (TextCursorVertexUniform){
         .position = (float2){
-            (float)inputContext->cursorX + inputContext->layout.x,
-            (float)inputContext->cursorY + inputContext->layout.y,
+            inputContext->cursorX + inputContext->layout.x - inputContext->scrollHorizontalOffset,
+            inputContext->cursorY + inputContext->layout.y - inputContext->scrollVerticalOffset,
         },
         .size = (float2){cursor_width, (float)inputContext->cursorHeight},
         .windowDims = (float2){renderContext->renderWidth, renderContext->renderHeight},
