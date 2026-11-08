@@ -40,7 +40,6 @@ static inline void text_render_info_array_free(TextRenderInfoArray* infoArray) {
 static inline void text_line_init(TextLine* textLine, InputContext* inputContext) {
     DYNAMIC_ARRAY_INIT((*textLine));
     text_render_info_array_init(&textLine->renderInfo, inputContext);
-    textLine->lineWasUpdated = false;
     textLine->wrapState = TEXT_CURSOR_WRAP_STATE_UP;
 }
 
@@ -407,6 +406,9 @@ int InputContextCreate(InputContext* inputContext, AppContext* appContext, TTF_F
     inputContext->scrollHorizontalOffset = 0;
     inputContext->scrollVerticalOffset = 0;
 
+    inputContext->lineRenderIndexStart = 0;
+    inputContext->lineRenderIndexEnd = 0;
+
     inputContext->tabWidth = 5;
 
     inputContext->app_context = appContext;
@@ -417,6 +419,8 @@ int InputContextCreate(InputContext* inputContext, AppContext* appContext, TTF_F
 
     inputContext->line_spacing = TTF_GetFontLineSkip(font);
     inputContext->font = font;
+
+    DYNAMIC_ARRAY_INIT(inputContext->modifiedLines);
 
     DYNAMIC_ARRAY_INIT(inputContext->buffer);
 
@@ -433,6 +437,7 @@ int InputContextDestroy(InputContext* inputContext) {
         DYNAMIC_ARRAY_FREE(inputContext->buffer.arr[i]);
     }
     DYNAMIC_ARRAY_FREE(inputContext->buffer);
+    DYNAMIC_ARRAY_FREE(inputContext->modifiedLines);
     return 0;
 }
 
@@ -442,8 +447,12 @@ int InputContextClear(InputContext* inputContext) {
         DYNAMIC_ARRAY_FREE(inputContext->buffer.arr[i]);
     }
     DYNAMIC_ARRAY_FREE(inputContext->buffer);
+    DYNAMIC_ARRAY_FREE(inputContext->modifiedLines);
 
     DYNAMIC_ARRAY_INIT(inputContext->buffer);
+    DYNAMIC_ARRAY_INIT(inputContext->modifiedLines);
+
+    DYNAMIC_ARRAY_INIT(inputContext->modifiedLines);
 
     TextLine firstLine;
     text_line_init(&firstLine, inputContext);
@@ -457,8 +466,22 @@ int InputContextClear(InputContext* inputContext) {
     inputContext->scrollHorizontalOffset = 0;
     inputContext->scrollVerticalOffset = 0;
 
+    inputContext->lineRenderIndexStart = 0;
+    inputContext->lineRenderIndexEnd = 0;
+
     inputContext->flags = (uint32_t)(0);
 
+    return 0;
+}
+
+static inline int InputContextModifiedLinesAppend(InputContext* inputContext, int index) {
+    // Don't want to double count indices
+    for (int i = 0; i < inputContext->modifiedLines.len; i++) {
+        if (inputContext->modifiedLines.arr[i] == index) {
+            return 0;
+        }
+    }
+    DYNAMIC_ARRAY_APPEND(inputContext->modifiedLines, index);
     return 0;
 }
 
@@ -472,7 +495,7 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
     switch (event->type) {
     case SDL_EVENT_TEXT_INPUT: {
         InputContextBufferInsert(inputContext, (char*)event->text.text, SDL_strlen(event->text.text));
-        inputContext->buffer.arr[inputContext->cursorLine].lineWasUpdated = true;
+        InputContextModifiedLinesAppend(inputContext, inputContext->cursorLine);
         inputContext->flags |= INPUT_CONTEXT_BUFFER_WAS_MODIFIED;
     } break;
 
@@ -482,7 +505,6 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
         switch (event->key.key) {
         case SDLK_BACKSPACE: {
             if (inputContext->cursorIndex == 0 && inputContext->cursorLine > 0) {
-                inputContext->buffer.arr[inputContext->cursorLine - 1].lineWasUpdated = true;
                 inputContext->cursorIndex = inputContext->buffer.arr[inputContext->cursorLine - 1].len;
 
                 if (inputContext->buffer.arr[inputContext->cursorLine].len > 0) {
@@ -495,11 +517,21 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
                 text_line_destroy(&inputContext->buffer.arr[inputContext->cursorLine]);
                 DYNAMIC_ARRAY_REMOVE(inputContext->buffer, inputContext->cursorLine);
 
-                inputContext->cursorLine--;
-                if (inputContext->cursorLine < 0) {
-                    inputContext->cursorLine = 0;
+                // Make sure to update any indices that come after inputContext->cursorLine
+                // to be one less since they all got shifted left in the array after the removal of the line
+                for (int i = 0; i < inputContext->modifiedLines.len; i++) {
+                    if (inputContext->modifiedLines.arr[i] > inputContext->cursorLine) {
+                        if (inputContext->modifiedLines.arr[i] > 0) {
+                            inputContext->modifiedLines.arr[i]--;
+                        }
+                    } else if (inputContext->modifiedLines.arr[i] == inputContext->cursorLine) {
+                        DYNAMIC_ARRAY_REMOVE(inputContext->modifiedLines, i);
+                        i--;
+                    }
                 }
+                InputContextModifiedLinesAppend(inputContext, inputContext->cursorLine - 1);
 
+                inputContext->cursorLine--;
                 inputContext->flags |= INPUT_CONTEXT_BUFFER_WAS_MODIFIED;
             } else if (inputContext->cursorIndex > 0) {
                 const char* indexStr = &inputContext->buffer.arr[inputContext->cursorLine].arr[inputContext->cursorIndex];
@@ -513,7 +545,7 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
                     inputContext->cursorIndex = 0;
                 }
 
-                inputContext->buffer.arr[inputContext->cursorLine].lineWasUpdated = true;
+                InputContextModifiedLinesAppend(inputContext, inputContext->cursorLine);
                 inputContext->flags |= INPUT_CONTEXT_BUFFER_WAS_MODIFIED;
             }
         } break;
@@ -535,14 +567,20 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
                     inputContext->cursorIndex,
                     inputContext->buffer.arr[inputContext->cursorLine].len - inputContext->cursorIndex);
 
-                inputContext->buffer.arr[inputContext->cursorLine].lineWasUpdated = true;
+                InputContextModifiedLinesAppend(inputContext, inputContext->cursorLine);
             }
 
+            // Have to make sure to update all the indices that come after and at the insertion index
+            for (int i = 0; i < inputContext->modifiedLines.len; i++) {
+                if (inputContext->modifiedLines.arr[i] >= (inputContext->cursorLine + 1)) {
+                    inputContext->modifiedLines.arr[i]++;
+                }
+            }
             DYNAMIC_ARRAY_INSERT(inputContext->buffer, inputContext->cursorLine + 1, newLine);
 
             inputContext->cursorLine++;
             inputContext->cursorIndex = 0;
-            inputContext->buffer.arr[inputContext->cursorLine].lineWasUpdated = true;
+            InputContextModifiedLinesAppend(inputContext, inputContext->cursorLine);
             inputContext->flags |= INPUT_CONTEXT_BUFFER_WAS_MODIFIED;
         } break;
 
@@ -654,7 +692,7 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
             for (int i = 0; i < inputContext->tabWidth; i++) {
                 InputContextBufferInsert(inputContext, " ", 1);
             }
-            inputContext->buffer.arr[inputContext->cursorLine].lineWasUpdated = true;
+            InputContextModifiedLinesAppend(inputContext, inputContext->cursorLine);
             inputContext->flags |= INPUT_CONTEXT_BUFFER_WAS_MODIFIED;
         } break;
 
@@ -676,7 +714,7 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
 
                     if (code == '\n') {
                         InputContextBufferInsert(inputContext, &clipboardText[startByteOffset], currByteOffset - startByteOffset);
-                        inputContext->buffer.arr[inputContext->cursorLine].lineWasUpdated = true;
+                        InputContextModifiedLinesAppend(inputContext, inputContext->cursorLine);
 
                         TextLine newLine;
                         text_line_init(&newLine, inputContext);
@@ -695,16 +733,22 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
                                 inputContext->buffer.arr[inputContext->cursorLine].len - inputContext->cursorIndex);
                         }
 
+                        // Have to make sure to update all the indices that come after and at the insertion index
+                        for (int i = 0; i < inputContext->modifiedLines.len; i++) {
+                            if (inputContext->modifiedLines.arr[i] >= (inputContext->cursorLine + 1)) {
+                                inputContext->modifiedLines.arr[i]++;
+                            }
+                        }
                         DYNAMIC_ARRAY_INSERT(inputContext->buffer, inputContext->cursorLine + 1, newLine);
 
                         inputContext->cursorLine++;
                         inputContext->cursorIndex = 0;
-                        inputContext->buffer.arr[inputContext->cursorLine].lineWasUpdated = true;
+                        InputContextModifiedLinesAppend(inputContext, inputContext->cursorLine);
 
                         startByteOffset = currByteOffset + code_width;
                     } else if (psLen == 0) {
                         InputContextBufferInsert(inputContext, &clipboardText[startByteOffset], clipboardTextLen - startByteOffset);
-                        inputContext->buffer.arr[inputContext->cursorLine].lineWasUpdated = true;
+                        InputContextModifiedLinesAppend(inputContext, inputContext->cursorLine);
                         break;
                     }
 
@@ -823,6 +867,82 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
     return 0;
 }
 
+static inline void UpdateRenderIndexBounds(InputContext* inputContext) {
+    int offsetY = 0;
+    inputContext->lineRenderOffsetY = 0;
+    inputContext->lineRenderIndexStart = 0;
+    inputContext->lineRenderIndexEnd = 0;
+    for (int i = 0; i < inputContext->buffer.len; i++) {
+        inputContext->lineRenderIndexEnd = i + 1;
+        if (offsetY - inputContext->scrollVerticalOffset < -inputContext->line_spacing) {
+            inputContext->lineRenderIndexStart = i + 1;
+            inputContext->lineRenderOffsetY += inputContext->line_spacing * inputContext->buffer.arr[i].renderInfo.len;
+        } else if ((offsetY + inputContext->line_spacing) - inputContext->scrollVerticalOffset > inputContext->layout.height) {
+            break;
+        }
+        offsetY += inputContext->buffer.arr[i].renderInfo.len * inputContext->line_spacing;
+    }
+}
+
+static inline void InputContextUpdateLine(InputContext* inputContext, int index, bool fontWasChanged) {
+    StringSliceArray lineSlices = (StringSliceArray){
+        .arr = (StringSlice[]){{
+            .string = inputContext->buffer.arr[index].arr,
+            .len = inputContext->buffer.arr[index].len,
+        }},
+        .len = 1,
+        .capacity = 0,
+    };
+
+    if (inputContext->layoutMode == INPUT_CONTEXT_LAYOUT_MODE_WRAP) {
+        lineSlices = get_line_text_wrap_slice_array(inputContext, index);
+
+        while (inputContext->buffer.arr[index].renderInfo.len != lineSlices.len) {
+            if (inputContext->buffer.arr[index].renderInfo.len < lineSlices.len) {
+                TextRenderInfo currRenderInfo;
+                text_render_info_init(&currRenderInfo, inputContext);
+                DYNAMIC_ARRAY_APPEND(inputContext->buffer.arr[index].renderInfo, currRenderInfo);
+            } else if (inputContext->buffer.arr[index].renderInfo.len > lineSlices.len) {
+                TextRenderInfoArray* infoArray = &inputContext->buffer.arr[index].renderInfo;
+                text_render_info_free(&infoArray->arr[infoArray->len - 1]);
+                DYNAMIC_ARRAY_POP((*infoArray));
+            }
+        }
+    }
+
+    for (int j = 0; j < inputContext->buffer.arr[index].renderInfo.len; j++) {
+        TextRenderInfo* currInfo = &inputContext->buffer.arr[index].renderInfo.arr[j];
+
+        if (fontWasChanged == true) {
+            TTF_SetTextFont(currInfo->text, inputContext->font);
+        }
+
+        // Internally, the strings strings are not null terminated for the lines, which means passing
+        // a length of 0 to TTF_SetTextString will cause invalid reads since TTF_SetTextString assumes null
+        // terminated strings when the length parameter is 0
+        if (lineSlices.arr[j].len == 0) {
+            TTF_SetTextString(currInfo->text, "", 0);
+        } else {
+            TTF_SetTextString(currInfo->text, lineSlices.arr[j].string, lineSlices.arr[j].len);
+        }
+        TTF_GetTextSize(currInfo->text, &currInfo->textWidth, &currInfo->textHeight);
+        InputContextGenerateGPUBuffersForLine(inputContext->app_context, currInfo);
+    }
+
+    if (inputContext->layoutMode == INPUT_CONTEXT_LAYOUT_MODE_WRAP) {
+        DYNAMIC_ARRAY_FREE(lineSlices);
+    }
+
+    for (int j = 0; j < inputContext->buffer.arr[index].renderInfo.len; j++) {
+        inputContext->maxHeight += inputContext->line_spacing;
+        int textWidth, textHeight;
+        TTF_GetStringSize(inputContext->font, inputContext->buffer.arr[index].renderInfo.arr[j].text->text, 0, &textWidth, &textHeight);
+        if (textWidth > inputContext->maxLineWidth) {
+            inputContext->maxLineWidth = textWidth;
+        }
+    }
+}
+
 int InputContextRefresh(InputContext* inputContext) {
     if (
         inputContext->flags & INPUT_CONTEXT_BUFFER_WAS_MODIFIED ||
@@ -831,77 +951,20 @@ int InputContextRefresh(InputContext* inputContext) {
         ((inputContext->flags & INPUT_CONTEXT_LAYOUT_WAS_MODIFIED) &&
          inputContext->layoutMode == INPUT_CONTEXT_LAYOUT_MODE_WRAP)) {
 
-        inputContext->maxLineWidth = 0;
-        inputContext->maxHeight = 0;
-
         bool fontWasChanged = inputContext->flags & INPUT_CONTEXT_FONT_WAS_CHANGED;
         bool textWrapAffectedByLayout = ((inputContext->flags & INPUT_CONTEXT_LAYOUT_WAS_MODIFIED) &&
                                          inputContext->layoutMode == INPUT_CONTEXT_LAYOUT_MODE_WRAP);
-        for (int i = 0; i < inputContext->buffer.len; i++) {
-            // If the font was changed, every line needs to be updated to the new font (same for when the base color changes)
-            if (
-                inputContext->buffer.arr[i].lineWasUpdated == true ||
-                fontWasChanged == true ||
-                textWrapAffectedByLayout == true) {
 
-                StringSliceArray lineSlices = (StringSliceArray){
-                    .arr = (StringSlice[]){{
-                        .string = inputContext->buffer.arr[i].arr,
-                        .len = inputContext->buffer.arr[i].len,
-                    }},
-                    .len = 1,
-                    .capacity = 0,
-                };
+        if (fontWasChanged || textWrapAffectedByLayout) {
+            inputContext->maxLineWidth = 0;
+            inputContext->maxHeight = 0;
 
-                if (inputContext->layoutMode == INPUT_CONTEXT_LAYOUT_MODE_WRAP) {
-                    lineSlices = get_line_text_wrap_slice_array(inputContext, i);
-
-                    while (inputContext->buffer.arr[i].renderInfo.len != lineSlices.len) {
-                        if (inputContext->buffer.arr[i].renderInfo.len < lineSlices.len) {
-                            TextRenderInfo currRenderInfo;
-                            text_render_info_init(&currRenderInfo, inputContext);
-                            DYNAMIC_ARRAY_APPEND(inputContext->buffer.arr[i].renderInfo, currRenderInfo);
-                        } else if (inputContext->buffer.arr[i].renderInfo.len > lineSlices.len) {
-                            TextRenderInfoArray* infoArray = &inputContext->buffer.arr[i].renderInfo;
-                            text_render_info_free(&infoArray->arr[infoArray->len - 1]);
-                            DYNAMIC_ARRAY_POP((*infoArray));
-                        }
-                    }
-                }
-
-                for (int j = 0; j < inputContext->buffer.arr[i].renderInfo.len; j++) {
-                    TextRenderInfo* currInfo = &inputContext->buffer.arr[i].renderInfo.arr[j];
-
-                    if (fontWasChanged == true) {
-                        TTF_SetTextFont(currInfo->text, inputContext->font);
-                    }
-
-                    // Internally, the strings strings are not null terminated for the lines, which means passing
-                    // a length of 0 to TTF_SetTextString will cause invalid reads since TTF_SetTextString assumes null
-                    // terminated strings when the length parameter is 0
-                    if (lineSlices.arr[j].len == 0) {
-                        TTF_SetTextString(currInfo->text, "", 0);
-                    } else {
-                        TTF_SetTextString(currInfo->text, lineSlices.arr[j].string, lineSlices.arr[j].len);
-                    }
-                    TTF_GetTextSize(currInfo->text, &currInfo->textWidth, &currInfo->textHeight);
-                    InputContextGenerateGPUBuffersForLine(inputContext->app_context, currInfo);
-
-                    inputContext->buffer.arr[i].lineWasUpdated = false;
-                }
-
-                if (inputContext->layoutMode == INPUT_CONTEXT_LAYOUT_MODE_WRAP) {
-                    DYNAMIC_ARRAY_FREE(lineSlices);
-                }
+            for (int i = 0; i < inputContext->buffer.len; i++) {
+                InputContextUpdateLine(inputContext, i, fontWasChanged);
             }
-
-            for (int j = 0; j < inputContext->buffer.arr[i].renderInfo.len; j++) {
-                inputContext->maxHeight += inputContext->line_spacing;
-                int textWidth, textHeight;
-                TTF_GetStringSize(inputContext->font, inputContext->buffer.arr[i].renderInfo.arr[j].text->text, 0, &textWidth, &textHeight);
-                if (textWidth > inputContext->maxLineWidth) {
-                    inputContext->maxLineWidth = textWidth;
-                }
+        } else {
+            for (int i = 0; i < inputContext->modifiedLines.len; i++) {
+                InputContextUpdateLine(inputContext, inputContext->modifiedLines.arr[i], false);
             }
         }
 
@@ -924,15 +987,14 @@ int InputContextRefresh(InputContext* inputContext) {
         ((inputContext->flags & INPUT_CONTEXT_LAYOUT_WAS_MODIFIED) &&
          inputContext->layoutMode == INPUT_CONTEXT_LAYOUT_MODE_WRAP)) {
         int tempInt;
+
         // If statement checks for 0 because the line strings are not null terminated and most of the TTF functions treat
         // a length of 0 as meaning the string is null terminated
         if (inputContext->cursorIndex == 0) {
             inputContext->cursorX = 0;
             inputContext->cursorY = 0;
             for (int i = 0; i < inputContext->cursorLine; i++) {
-                for (size_t j = 0; j < inputContext->buffer.arr[i].renderInfo.len; j++) {
-                    inputContext->cursorY += inputContext->line_spacing;
-                }
+                inputContext->cursorY += inputContext->buffer.arr[i].renderInfo.len * inputContext->line_spacing;
             }
         } else {
             if (inputContext->layoutMode == INPUT_CONTEXT_LAYOUT_MODE_WRAP) {
@@ -940,9 +1002,7 @@ int InputContextRefresh(InputContext* inputContext) {
 
                 inputContext->cursorY = 0;
                 for (int i = 0; i < inputContext->cursorLine; i++) {
-                    for (size_t j = 0; j < inputContext->buffer.arr[i].renderInfo.len; j++) {
-                        inputContext->cursorY += inputContext->line_spacing;
-                    }
+                    inputContext->cursorY += inputContext->buffer.arr[i].renderInfo.len * inputContext->line_spacing;
                 }
 
                 int indexTracker = inputContext->cursorIndex;
@@ -1021,10 +1081,28 @@ int InputContextRefresh(InputContext* inputContext) {
         }
     }
 
+    if (
+        inputContext->flags & INPUT_CONTEXT_BUFFER_WAS_MODIFIED ||
+        inputContext->flags & INPUT_CONTEXT_CURSOR_WAS_MODIFIED ||
+        inputContext->flags & INPUT_CONTEXT_LAYOUT_WAS_MODIFIED) {
+        UpdateRenderIndexBounds(inputContext);
+    }
+
     // This will reset all the flags to false
     inputContext->flags = (uint32_t)(0);
+    DYNAMIC_ARRAY_CLEAR(inputContext->modifiedLines);
 
     return 0;
+}
+
+void InputContextSetHorizontalScrollOffset(InputContext* inputContext, int h_scroll_amount) {
+    inputContext->scrollHorizontalOffset = SDL_clamp(h_scroll_amount, 0, inputContext->scrollMaxHorizontalOffset);
+    UpdateRenderIndexBounds(inputContext);
+}
+
+void InputContextSetVerticalScrollOffset(InputContext* inputContext, int v_scroll_amount) {
+    inputContext->scrollVerticalOffset = SDL_clamp(v_scroll_amount, 0, inputContext->scrollMaxVerticalOffset);
+    UpdateRenderIndexBounds(inputContext);
 }
 
 int InputContextOpenFile(InputContext* inputContext, const char* file_path) {
@@ -1050,7 +1128,7 @@ int InputContextOpenFile(InputContext* inputContext, const char* file_path) {
 
         if (code == '\n') {
             InputContextBufferInsert(inputContext, &file_buffer[startByteOffset], currByteOffset - startByteOffset);
-            inputContext->buffer.arr[inputContext->cursorLine].lineWasUpdated = true;
+            InputContextModifiedLinesAppend(inputContext, inputContext->cursorLine);
 
             TextLine newLine;
             text_line_init(&newLine, inputContext);
@@ -1069,16 +1147,22 @@ int InputContextOpenFile(InputContext* inputContext, const char* file_path) {
                     inputContext->buffer.arr[inputContext->cursorLine].len - inputContext->cursorIndex);
             }
 
+            // Have to make sure to update all the indices that come after and at the insertion index
+            for (int i = 0; i < inputContext->modifiedLines.len; i++) {
+                if (inputContext->modifiedLines.arr[i] >= (inputContext->cursorLine + 1)) {
+                    inputContext->modifiedLines.arr[i]++;
+                }
+            }
             DYNAMIC_ARRAY_INSERT(inputContext->buffer, inputContext->cursorLine + 1, newLine);
 
             inputContext->cursorLine++;
             inputContext->cursorIndex = 0;
-            inputContext->buffer.arr[inputContext->cursorLine].lineWasUpdated = true;
+            InputContextModifiedLinesAppend(inputContext, inputContext->cursorLine);
 
             startByteOffset = currByteOffset + code_width;
         } else if (psLen == 0) {
             InputContextBufferInsert(inputContext, &file_buffer[startByteOffset], file_buffer_len - startByteOffset);
-            inputContext->buffer.arr[inputContext->cursorLine].lineWasUpdated = true;
+            InputContextModifiedLinesAppend(inputContext, inputContext->cursorLine);
             break;
         }
 

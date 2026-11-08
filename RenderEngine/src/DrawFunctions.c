@@ -270,19 +270,8 @@ void DrawInputContext(RenderContext* renderContext, InputContext* inputContext) 
         renderContext->renderPass,
         renderContext->appContext->builtinPipelines[BUILTIN_PIPELINE_TEXT]);
 
-    int offsetY = inputContext->layout.y;
-    for (int i = 0; i < inputContext->buffer.len; i++) {
-        if (offsetY - inputContext->scrollVerticalOffset < -inputContext->line_spacing) {
-            for (int j = 0; j < inputContext->buffer.arr[i].renderInfo.len; j++) {
-                offsetY += inputContext->line_spacing;
-            }
-            continue;
-        }
-
-        if (offsetY - inputContext->scrollVerticalOffset > inputContext->layout.height + inputContext->line_spacing) {
-            break;
-        }
-
+    int offsetY = inputContext->layout.y + inputContext->lineRenderOffsetY;
+    for (int i = inputContext->lineRenderIndexStart; i < inputContext->lineRenderIndexEnd; i++) {
         for (int j = 0; j < inputContext->buffer.arr[i].renderInfo.len; j++) {
             TextRenderInfo currInfo = inputContext->buffer.arr[i].renderInfo.arr[j];
 

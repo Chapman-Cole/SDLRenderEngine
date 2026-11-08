@@ -55,7 +55,6 @@ typedef struct TextLine {
     size_t capacity;
     int criticalIndex;
     TextCursorWrapState wrapState;
-    bool lineWasUpdated;
 } TextLine;
 
 typedef struct TextLineArray {
@@ -85,9 +84,16 @@ typedef enum InputContextLayoutMode {
     INPUT_CONTEXT_LAYOUT_MODE_WRAP,
 } InputContextLayoutMode;
 
+typedef struct InputContextIndexArray {
+    int* arr;
+    size_t len;
+    size_t capacity;
+} InputContextIndexArray;
+
 typedef struct InputContext {
     InputContextLayout layout;
     TextLineArray buffer;
+    InputContextIndexArray modifiedLines;
     TTF_Font* font;
     AppContext* app_context;
     int cursorLine;
@@ -107,6 +113,9 @@ typedef struct InputContext {
     float scrollHorizontalOffset;
     float scrollMaxVerticalOffset;
     float scrollVerticalOffset;
+    int lineRenderIndexStart;
+    int lineRenderIndexEnd;
+    int lineRenderOffsetY;
 } InputContext;
 
 // For use with SDL_PollEvent (or inside SDL_AppEvent callback). Also make sure to call
@@ -158,13 +167,9 @@ static inline void InputContextSetLayoutMode(InputContext* inputContext, InputCo
     inputContext->layoutMode = mode;
 }
 
-static inline void InputContextSetHorizontalScrollOffset(InputContext* inputContext, int h_scroll_amount) {
-    inputContext->scrollHorizontalOffset = SDL_clamp(h_scroll_amount, 0, inputContext->scrollMaxHorizontalOffset);
-}
+void InputContextSetHorizontalScrollOffset(InputContext* inputContext, int h_scroll_amount);
 
-static inline void InputContextSetVerticalScrollOffset(InputContext* inputContext, int v_scroll_amount) {
-    inputContext->scrollVerticalOffset = SDL_clamp(v_scroll_amount, 0, inputContext->scrollMaxVerticalOffset);
-}
+void InputContextSetVerticalScrollOffset(InputContext* inputContext, int v_scroll_amount);
 
 static inline void InputContextSetTabWidth(InputContext* inputContext, int tabWidth) {
     inputContext->tabWidth = tabWidth;

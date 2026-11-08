@@ -25,17 +25,15 @@ void HandleClayErrors(Clay_ErrorData errorData) {
     }
 }
 
-// Layout config is just a struct that can be declared statically, or inline
 Clay_ElementDeclaration sidebarItemConfig = {
     .layout = {
-        .sizing = {.width = {.size = {.minMax = {0}}, .type = CLAY__SIZING_TYPE_GROW}, .height = {.size = {.minMax = {50, 50}}, .type = CLAY__SIZING_TYPE_FIXED}},
+        .sizing = {.width = {.size = {.minMax = {0}}, .type = CLAY__SIZING_TYPE_GROW}, .height = {.size = {.minMax = {50, 150}}, .type = CLAY__SIZING_TYPE_FIXED}},
         .childAlignment = {.x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER},
     },
     .backgroundColor = {27, 65, 85, 255},
     .cornerRadius = {7.0, 7.0, 7.0, 7.0},
 };
 
-// Re-useable components are just normal functions
 void SidebarItemComponent(int id, int fontId) {
     CLAY(CLAY_IDI("sidebarItem", id), sidebarItemConfig) {
         CLAY_TEXT(CLAY_STRING("Compositor"), {.fontSize = 12, .fontId = fontId, .textColor = {255, 255, 255, 255}});
@@ -173,7 +171,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
                 static char buff5[200] = {0};
                 static int buff5_len = 0;
 
-                buff5_len = SDL_snprintf(buff5, 200, "line %d", inputContext.cursorLine);
+                buff5_len = SDL_snprintf(buff5, 200, "line %d\nlines: %d", inputContext.cursorLine, inputContext.buffer.len);
 
                 CLAY_TEXT(((Clay_String){.chars = buff5, .length = buff5_len, .isStaticallyAllocated = false}), {.fontSize = 12, .fontId = HackRegular12, .textColor = {255, 255, 255, 255}});
             }
