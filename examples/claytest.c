@@ -54,6 +54,28 @@ FontRegistryKey HackRegular12;
 InputContext inputContext;
 ClayCompositor clayCompositor;
 
+SDL_Mutex* openFileMutex = NULL;
+
+char file_path[301];
+int file_path_len = 0;
+
+static void SDLCALL file_dialog_callback(void* userdata, const char* const* filelist, int filter) {
+    if (!filelist) {
+        SDL_Log("Failed to get the file: %s", SDL_GetError());
+        return;
+    } else if (*filelist == NULL) {
+        SDL_Log("No file selected");
+        return;
+    }
+
+    SDL_LockMutex(openFileMutex);
+
+    file_path_len = SDL_snprintf(file_path, 300, "%s", filelist[0]);
+    file_path_len = SDL_clamp(file_path_len, 0, 300);
+
+    SDL_UnlockMutex(openFileMutex);
+}
+
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     appContext.windowName = "ClayTest";
     appContext.deviceName = APP_CONTEXT_DEVICE_DRIVER_AGNOSTIC;
@@ -78,10 +100,21 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 
     SDL_StartTextInput(appContext.window);
 
+    openFileMutex = SDL_CreateMutex();
+
     return SDL_APP_CONTINUE;
 }
 
 SDL_AppResult SDL_AppIterate(void* appstate) {
+    if (SDL_TryLockMutex(openFileMutex)) {
+        if (file_path_len > 0) {
+            file_path[file_path_len] = '\0';
+            InputContextOpenFile(&inputContext, file_path);
+            file_path_len = 0;
+        }
+        SDL_UnlockMutex(openFileMutex);
+    }
+
     AppContextUpdate(&appContext);
     InputContextRefresh(&inputContext);
 
@@ -162,6 +195,22 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
     if (event->type == SDL_EVENT_QUIT) {
         return SDL_APP_SUCCESS;
+    } else if (event->type == SDL_EVENT_KEY_DOWN) {
+        const bool* key_states = SDL_GetKeyboardState(NULL);
+
+        switch (event->key.key) {
+        case SDLK_L: {
+            if (key_states[SDL_SCANCODE_LCTRL] == true) {
+                InputContextClear(&inputContext);
+            }
+        } break;
+
+        case SDLK_O: {
+            if (key_states[SDL_SCANCODE_LCTRL] == true) {
+                SDL_ShowOpenFileDialog(file_dialog_callback, NULL, appContext.window, NULL, 0, NULL, false);
+            }
+        } break;
+        }
     }
 
     InputContextProcessEvent(&inputContext, event);
@@ -170,6 +219,8 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
 }
 
 void SDL_AppQuit(void* appstate, SDL_AppResult result) {
+    SDL_DestroyMutex(openFileMutex);
+
     SDL_StopTextInput(appContext.window);
 
     ClayCompositorDestroy(&clayCompositor);

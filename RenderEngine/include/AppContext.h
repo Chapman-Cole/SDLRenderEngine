@@ -1,9 +1,9 @@
 #ifndef APPCONTEXT_H
 #define APPCONTEXT_H
 
+#include "GPUTransferContext.h"
 #include "SDL3/SDL.h"
 #include "SDL3_ttf/SDL_ttf.h"
-#include "GPUTransferContext.h"
 
 #define APP_CONTEXT_DEVICE_DRIVER_VULKAN "vulkan"
 #define APP_CONTEXT_DEVICE_DRIVER_DIRECT3D12 "direct3d12"
@@ -31,6 +31,10 @@ typedef struct AppContext {
     float displayScale;
     double time;
     double deltaTime;
+    float mouseX;
+    float mouseY;
+    float mouseDeltaX;
+    float mouseDeltaY;
 } AppContext;
 
 #define APP_CONTEXT_DEVICE(appContext) ((appContext).device)
@@ -45,6 +49,18 @@ static inline void AppContextUpdate(AppContext* app_context) {
     double prevTime = app_context->time;
     app_context->time = (double)SDL_GetTicksNS() / 1'000'000'000.0;
     app_context->deltaTime = app_context->time - prevTime;
+
+    int prevMouseX = app_context->mouseX;
+    int prevMouseY = app_context->mouseY;
+
+    SDL_GetMouseState(&app_context->mouseX, &app_context->mouseY);
+
+    if (SDL_GetWindowRelativeMouseMode(app_context->window)) {
+        SDL_GetRelativeMouseState(&app_context->mouseDeltaX, &app_context->mouseDeltaY);
+    } else {
+        app_context->mouseDeltaX = app_context->mouseX - prevMouseX;
+        app_context->mouseDeltaY = app_context->mouseY - prevMouseY;
+    }
 }
 
 int AppContextTerminate(AppContext* app_context);

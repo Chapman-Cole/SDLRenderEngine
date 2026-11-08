@@ -201,7 +201,6 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
     }
 
     InputContextProcessEvent(&inputContext, event);
-
     return SDL_APP_CONTINUE;
 }
 

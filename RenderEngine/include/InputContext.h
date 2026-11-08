@@ -125,6 +125,10 @@ int InputContextRefresh(InputContext* inputContext);
 
 int InputContextDestroy(InputContext* inputContext);
 
+int InputContextClear(InputContext* inputContext);
+
+int InputContextOpenFile(InputContext* inputContext, const char* file_path);
+
 static inline void InputContextUpdateLayout(InputContext* inputContext, InputContextLayout layout) {
     if (
         inputContext->layout.x != layout.x ||
@@ -155,11 +159,11 @@ static inline void InputContextSetLayoutMode(InputContext* inputContext, InputCo
 }
 
 static inline void InputContextSetHorizontalScrollOffset(InputContext* inputContext, int h_scroll_amount) {
-    inputContext->scrollHorizontalOffset = SDL_clamp(h_scroll_amount, 0, 11 * inputContext->scrollMaxHorizontalOffset / 8);
+    inputContext->scrollHorizontalOffset = SDL_clamp(h_scroll_amount, 0, inputContext->scrollMaxHorizontalOffset);
 }
 
 static inline void InputContextSetVerticalScrollOffset(InputContext* inputContext, int v_scroll_amount) {
-    inputContext->scrollVerticalOffset = SDL_clamp(v_scroll_amount, 0, 11 * inputContext->scrollMaxVerticalOffset / 8);
+    inputContext->scrollVerticalOffset = SDL_clamp(v_scroll_amount, 0, inputContext->scrollMaxVerticalOffset);
 }
 
 static inline void InputContextSetTabWidth(InputContext* inputContext, int tabWidth) {
