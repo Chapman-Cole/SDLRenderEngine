@@ -4,6 +4,27 @@
 #include <SDL3_ttf/SDL_ttf.h>
 #include <stdbool.h>
 
+#define RGBA_TO_F(r, g, b, a) ((float[4]){(float)(r) / 255.0f, (float)(g) / 255.0f, (float)(b) / 255.0f, (float)(a) / 255.0f})
+
+// expects capital letters
+#define CHAR_TO_HEX_NUMBER(c) (((char)(c) - 65) < 0 ? ((char)(c) - 48) : (10 + (char)(c) - 65))
+
+// string must be at least 6 characters long (alpha should be a float between 0 and 255)
+// expects capital letters
+#define HEX_COLOR_TO_F(hexStr, alpha)                                       \
+    RGBA_TO_F(                                                              \
+        CHAR_TO_HEX_NUMBER(hexStr[1]) + 16 * CHAR_TO_HEX_NUMBER(hexStr[0]), \
+        CHAR_TO_HEX_NUMBER(hexStr[3]) + 16 * CHAR_TO_HEX_NUMBER(hexStr[2]), \
+        CHAR_TO_HEX_NUMBER(hexStr[5]) + 16 * CHAR_TO_HEX_NUMBER(hexStr[4]), \
+        alpha)
+
+static inline void set_float4_with_hex_color(float array[4], char* hexStr, char alpha) {
+    array[0] = (CHAR_TO_HEX_NUMBER(hexStr[1]) + 16 * CHAR_TO_HEX_NUMBER(hexStr[0])) / 255.0f;
+    array[1] = (CHAR_TO_HEX_NUMBER(hexStr[3]) + 16 * CHAR_TO_HEX_NUMBER(hexStr[2])) / 255.0f;
+    array[2] = (CHAR_TO_HEX_NUMBER(hexStr[5]) + 16 * CHAR_TO_HEX_NUMBER(hexStr[4])) / 255.0f;
+    array[3] = (float)(alpha) / 255.0f;
+}
+
 static inline void text_render_info_init(TextRenderInfo* info, InputContext* inputContext) {
     DYNAMIC_ARRAY_INIT(info->sequence);
     info->text = TTF_CreateText(inputContext->app_context->textEngine, inputContext->font, "", 0);
@@ -400,6 +421,12 @@ int InputContextCreate(InputContext* inputContext, AppContext* appContext, TTF_F
     inputContext->cursorColor[2] = cursorColor[2];
     inputContext->cursorColor[3] = cursorColor[3];
 
+    set_float4_with_hex_color(inputContext->highlightColor, "90D5FF", (char)(0.4f * 255.0f));
+    inputContext->mouseLeftDown = false;
+
+    inputContext->highlightStartIndex = 0;
+    inputContext->highlightStartLineIndex = 0;
+
     inputContext->cursorIndex = 0;
     inputContext->cursorLine = 0;
 
@@ -469,6 +496,9 @@ int InputContextClear(InputContext* inputContext) {
     inputContext->lineRenderIndexStart = 0;
     inputContext->lineRenderIndexEnd = 0;
 
+    inputContext->highlightStartIndex = 0;
+    inputContext->highlightStartLineIndex = 0;
+
     inputContext->flags = (uint32_t)(0);
 
     return 0;
@@ -489,6 +519,98 @@ static inline int InputContextBufferInsert(InputContext* inputContext, char* tex
     DYNAMIC_ARRAY_INSERT_ARRAY(inputContext->buffer.arr[inputContext->cursorLine], ((TextLine){.arr = text, .len = textLen, .capacity = 0}), inputContext->cursorIndex);
     inputContext->cursorIndex += textLen;
     return 0;
+}
+
+static inline void InputContextCalculateBufferPosFromMousePos(InputContext* inputContext, int* cursorLine, int* cursorIndex) {
+    float mouseX, mouseY;
+    SDL_GetMouseState(&mouseX, &mouseY);
+
+    int logicalWindowSizeX, logicalWindowSizeY;
+    SDL_GetWindowSize(inputContext->app_context->window, &logicalWindowSizeX, &logicalWindowSizeY);
+
+    int pixelWindowSizeX, pixelWindowSizeY;
+    SDL_GetWindowSizeInPixels(inputContext->app_context->window, &pixelWindowSizeX, &pixelWindowSizeY);
+
+    float mouseScaleX = (float)pixelWindowSizeX / (float)logicalWindowSizeX;
+    float mouseScaleY = (float)pixelWindowSizeY / (float)logicalWindowSizeY;
+
+    int translatedX = (int)(mouseX * mouseScaleX) - inputContext->layout.x + inputContext->scrollHorizontalOffset;
+    int translatedY = (int)(mouseY * mouseScaleY) - inputContext->layout.y + inputContext->scrollVerticalOffset;
+
+    if (translatedX < 0) {
+        translatedX = 0;
+    }
+
+    if (translatedY < 0) {
+        translatedY = 0;
+    }
+
+    int currLineIndex = (translatedY / inputContext->line_spacing);
+
+    if (currLineIndex >= inputContext->buffer.len) {
+        currLineIndex = inputContext->buffer.len - 1;
+    }
+
+    char* currString = inputContext->buffer.arr[currLineIndex].arr;
+    int currStringLen = inputContext->buffer.arr[currLineIndex].len;
+
+    int totalWidth, totalHeight;
+    TTF_GetStringSize(inputContext->font, currString, currStringLen, &totalWidth, &totalHeight);
+    if (translatedX > totalWidth) {
+        *cursorLine = currLineIndex;
+        *cursorIndex = currStringLen;
+        inputContext->flags |= INPUT_CONTEXT_CURSOR_WAS_MODIFIED;
+        return;
+    }
+
+    int estimatedNumCodepoints = (int)SDL_lroundf((float)translatedX / (float)TTF_GetFontHeight(inputContext->font));
+    int byteOffsetTracker = get_byte_offset_from_codepoints(currString, currStringLen, estimatedNumCodepoints);
+    int prevByteOffsetTracker = byteOffsetTracker;
+    const char* substringTracker = &currString[byteOffsetTracker];
+
+    if (byteOffsetTracker == 0) {
+        *cursorLine = currLineIndex;
+        *cursorIndex = byteOffsetTracker;
+        inputContext->flags |= INPUT_CONTEXT_CURSOR_WAS_MODIFIED;
+        return;
+    }
+
+    int lineWidth, lineHeight;
+    TTF_GetStringSize(inputContext->font, currString, byteOffsetTracker, &lineWidth, &lineHeight);
+    int prevLineWidth = lineWidth;
+
+    for (;;) {
+        prevLineWidth = lineWidth;
+        prevByteOffsetTracker = byteOffsetTracker;
+        if (lineWidth < translatedX) {
+            size_t psLen = currStringLen - byteOffsetTracker;
+            size_t psLenCopy = psLen;
+            const char* stringCopy = currString;
+            Uint32 code = SDL_StepUTF8(&stringCopy, &psLen);
+            Uint32 code_width = (Uint32)(psLenCopy - psLen);
+            byteOffsetTracker += code_width;
+            TTF_GetStringSize(inputContext->font, currString, byteOffsetTracker, &lineWidth, &lineHeight);
+        } else if (lineWidth > translatedX) {
+            const char* substringTrackerCopy = substringTracker;
+            Uint32 code = SDL_StepBackUTF8((const char*)currString, &substringTracker);
+            Uint32 code_width = (Uint32)(substringTrackerCopy - substringTracker);
+            byteOffsetTracker -= code_width;
+            if (byteOffsetTracker <= 0) {
+                break;
+            }
+            TTF_GetStringSize(inputContext->font, currString, byteOffsetTracker, &lineWidth, &lineHeight);
+        } else {
+            break;
+        }
+
+        if (prevLineWidth <= translatedX && lineWidth > translatedX) {
+            byteOffsetTracker = prevByteOffsetTracker;
+            break;
+        }
+    }
+
+    *cursorLine = currLineIndex;
+    *cursorIndex = byteOffsetTracker;
 }
 
 int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
@@ -761,6 +883,92 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
                 inputContext->flags |= INPUT_CONTEXT_BUFFER_WAS_MODIFIED;
             }
         } break;
+
+        case SDLK_C: {
+            if (key_states[SDL_SCANCODE_LCTRL]) {
+                struct {
+                    char* arr;
+                    size_t len;
+                    size_t capacity;
+                } charArray;
+                DYNAMIC_ARRAY_INIT(charArray);
+
+                int startLineIndex = 0;
+                int endLineIndex = 0;
+                int startIndex = 0;
+                int endIndex = 0;
+                if (inputContext->cursorLine >= inputContext->highlightStartLineIndex) {
+                    endLineIndex = inputContext->cursorLine;
+                    endIndex = inputContext->cursorIndex;
+                    startLineIndex = inputContext->highlightStartLineIndex;
+                    startIndex = inputContext->highlightStartIndex;
+                } else {
+                    endLineIndex = inputContext->highlightStartLineIndex;
+                    endIndex = inputContext->highlightStartIndex;
+                    startLineIndex = inputContext->cursorLine;
+                    startIndex = inputContext->cursorIndex;
+                }
+
+                if (startLineIndex == endLineIndex) {
+                    if (startIndex != endIndex) {
+                        if (startIndex > endIndex) {
+                            int temp = endIndex;
+                            endIndex = startIndex;
+                            startIndex = temp;
+                        }
+
+                        struct {
+                            char* arr;
+                            size_t len;
+                            size_t capacity;
+                        } tempArr = {
+                            .arr = &inputContext->buffer.arr[startLineIndex].arr[startIndex],
+                            .len = endIndex - startIndex,
+                            .capacity = 0,
+                        };
+
+                        DYNAMIC_ARRAY_INSERT_ARRAY(charArray, tempArr, charArray.len);
+                    }
+                } else {
+                    for (int i = startLineIndex; i <= endLineIndex; i++) {
+                        struct {
+                            char* arr;
+                            size_t len;
+                            size_t capacity;
+                        } tempArr;
+
+                        if (i == startLineIndex) {
+                            tempArr.arr = &inputContext->buffer.arr[i].arr[startIndex];
+                            tempArr.len = inputContext->buffer.arr[i].len - startIndex;
+                            tempArr.capacity = -1;
+                        } else if (i == endLineIndex) {
+                            tempArr.arr = inputContext->buffer.arr[i].arr;
+                            tempArr.len = endIndex;
+                            tempArr.capacity = -1;
+                        } else {
+                            if (inputContext->buffer.arr[i].len > 0) {
+                                tempArr.arr = inputContext->buffer.arr[i].arr;
+                                tempArr.len = inputContext->buffer.arr[i].len;
+                                tempArr.capacity = -1;
+                            }
+                        }
+
+                        if (tempArr.len > 0) {
+                            DYNAMIC_ARRAY_INSERT_ARRAY(charArray, tempArr, charArray.len);
+                        }
+                        if (i < endLineIndex) {
+                            DYNAMIC_ARRAY_APPEND(charArray, '\n');
+                        }
+                    }
+                }
+
+                DYNAMIC_ARRAY_APPEND(charArray, '\0');
+
+                SDL_SetClipboardText(charArray.arr);
+
+                DYNAMIC_ARRAY_FREE(charArray);
+            }
+        } break;
         }
     } break;
 
@@ -777,88 +985,25 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
 
     case SDL_EVENT_MOUSE_BUTTON_DOWN: {
         if (event->button.button == SDL_BUTTON_LEFT) {
-            float mouseX, mouseY;
-            SDL_GetMouseState(&mouseX, &mouseY);
+            inputContext->mouseLeftDown = true;
+            InputContextCalculateBufferPosFromMousePos(inputContext, &inputContext->cursorLine, &inputContext->cursorIndex);
 
-            int logicalWindowSizeX, logicalWindowSizeY;
-            SDL_GetWindowSize(inputContext->app_context->window, &logicalWindowSizeX, &logicalWindowSizeY);
+            inputContext->highlightStartIndex = inputContext->cursorIndex;
+            inputContext->highlightStartLineIndex = inputContext->cursorLine;
 
-            int pixelWindowSizeX, pixelWindowSizeY;
-            SDL_GetWindowSizeInPixels(inputContext->app_context->window, &pixelWindowSizeX, &pixelWindowSizeY);
+            inputContext->flags |= INPUT_CONTEXT_CURSOR_WAS_MODIFIED;
+        }
+    } break;
 
-            float mouseScaleX = (float)pixelWindowSizeX / (float)logicalWindowSizeX;
-            float mouseScaleY = (float)pixelWindowSizeY / (float)logicalWindowSizeY;
+    case SDL_EVENT_MOUSE_BUTTON_UP: {
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            inputContext->mouseLeftDown = false;
+        }
+    } break;
 
-            int translatedX = (int)(mouseX * mouseScaleX) - inputContext->layout.x + inputContext->scrollHorizontalOffset;
-            int translatedY = (int)(mouseY * mouseScaleY) - inputContext->layout.y + inputContext->scrollVerticalOffset;
-            if (translatedX < 0 || translatedY < 0) {
-                break;
-            }
-
-            int currLineIndex = (translatedY / inputContext->line_spacing);
-
-            if (currLineIndex >= inputContext->buffer.len) {
-                break;
-            }
-
-            char* currString = inputContext->buffer.arr[currLineIndex].arr;
-            int currStringLen = inputContext->buffer.arr[currLineIndex].len;
-
-            int totalWidth, totalHeight;
-            TTF_GetStringSize(inputContext->font, currString, currStringLen, &totalWidth, &totalHeight);
-            if (translatedX > totalWidth) {
-                inputContext->cursorLine = currLineIndex;
-                inputContext->cursorIndex = currStringLen;
-                inputContext->flags |= INPUT_CONTEXT_CURSOR_WAS_MODIFIED;
-                break;
-            }
-
-            int estimatedNumCodepoints = (int)SDL_lroundf((float)translatedX / (float)TTF_GetFontHeight(inputContext->font));
-            int byteOffsetTracker = get_byte_offset_from_codepoints(currString, currStringLen, estimatedNumCodepoints);
-            int prevByteOffsetTracker = byteOffsetTracker;
-            const char* substringTracker = &currString[byteOffsetTracker];
-
-            if (byteOffsetTracker == 0) {
-                inputContext->cursorLine = currLineIndex;
-                inputContext->cursorIndex = byteOffsetTracker;
-                inputContext->flags |= INPUT_CONTEXT_CURSOR_WAS_MODIFIED;
-                break;
-            }
-
-            int lineWidth, lineHeight;
-            TTF_GetStringSize(inputContext->font, currString, byteOffsetTracker, &lineWidth, &lineHeight);
-            int prevLineWidth = lineWidth;
-
-            for (;;) {
-                prevLineWidth = lineWidth;
-                prevByteOffsetTracker = byteOffsetTracker;
-                if (lineWidth < translatedX) {
-                    size_t psLen = currStringLen - byteOffsetTracker;
-                    size_t psLenCopy = psLen;
-                    const char* stringCopy = currString;
-                    Uint32 code = SDL_StepUTF8(&stringCopy, &psLen);
-                    Uint32 code_width = (Uint32)(psLenCopy - psLen);
-                    byteOffsetTracker += code_width;
-                    TTF_GetStringSize(inputContext->font, currString, byteOffsetTracker, &lineWidth, &lineHeight);
-                } else if (lineWidth > translatedX) {
-                    const char* substringTrackerCopy = substringTracker;
-                    Uint32 code = SDL_StepBackUTF8((const char*)currString, &substringTracker);
-                    Uint32 code_width = (Uint32)(substringTrackerCopy - substringTracker);
-                    byteOffsetTracker -= code_width;
-                    TTF_GetStringSize(inputContext->font, currString, byteOffsetTracker, &lineWidth, &lineHeight);
-                } else {
-                    break;
-                }
-
-                if (prevLineWidth <= translatedX && lineWidth > translatedX) {
-                    byteOffsetTracker = prevByteOffsetTracker;
-                    break;
-                }
-            }
-
-            inputContext->cursorLine = currLineIndex;
-            inputContext->cursorIndex = byteOffsetTracker;
-
+    case SDL_EVENT_MOUSE_MOTION: {
+        if (inputContext->mouseLeftDown) {
+            InputContextCalculateBufferPosFromMousePos(inputContext, &inputContext->cursorLine, &inputContext->cursorIndex);
             inputContext->flags |= INPUT_CONTEXT_CURSOR_WAS_MODIFIED;
         }
     } break;
@@ -1078,6 +1223,11 @@ int InputContextRefresh(InputContext* inputContext) {
             if (inputContext->cursorX - inputContext->scrollHorizontalOffset > inputContext->layout.width) {
                 InputContextSetHorizontalScrollOffset(inputContext, (inputContext->cursorX / inputContext->layout.width) * inputContext->layout.width);
             }
+        }
+
+        if (inputContext->mouseLeftDown == false) {
+            inputContext->highlightStartLineIndex = inputContext->cursorLine;
+            inputContext->highlightStartIndex = inputContext->cursorIndex;
         }
     }
 

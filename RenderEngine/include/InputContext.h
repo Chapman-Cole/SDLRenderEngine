@@ -105,6 +105,7 @@ typedef struct InputContext {
     uint32_t flags;
     float textColor[4];
     float cursorColor[4];
+    float highlightColor[4];
     InputContextLayoutMode layoutMode;
     int tabWidth;
     int maxLineWidth;
@@ -116,6 +117,9 @@ typedef struct InputContext {
     int lineRenderIndexStart;
     int lineRenderIndexEnd;
     int lineRenderOffsetY;
+    bool mouseLeftDown;
+    int highlightStartIndex;
+    int highlightStartLineIndex;
 } InputContext;
 
 // For use with SDL_PollEvent (or inside SDL_AppEvent callback). Also make sure to call
@@ -173,6 +177,13 @@ void InputContextSetVerticalScrollOffset(InputContext* inputContext, int v_scrol
 
 static inline void InputContextSetTabWidth(InputContext* inputContext, int tabWidth) {
     inputContext->tabWidth = tabWidth;
+}
+
+static inline void InputContextSetHighlightColor(InputContext* inputContext, float color[4]) {
+    inputContext->highlightColor[0] = color[0];
+    inputContext->highlightColor[1] = color[1];
+    inputContext->highlightColor[2] = color[2];
+    inputContext->highlightColor[3] = color[3];
 }
 
 #endif

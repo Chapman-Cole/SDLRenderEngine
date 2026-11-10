@@ -6,6 +6,20 @@
 #include "SDL3/SDL_main.h"
 #include "SDLRenderEngine.h"
 
+#define RGBA_TO_F(r, g, b, a) ((float[4]){(float)(r) / 255.0f, (float)(g) / 255.0f, (float)(b) / 255.0f, (float)(a) / 255.0f})
+
+// expects capital letters
+#define CHAR_TO_HEX_NUMBER(c) (((char)(c) - 65) < 0 ? ((char)(c) - 48) : (10 + (char)(c) - 65))
+
+// string must be at least 6 characters long (alpha should be a float between 0 and 255)
+// expects capital letters
+#define HEX_COLOR_TO_F(hexStr, alpha)                                       \
+    RGBA_TO_F(                                                              \
+        CHAR_TO_HEX_NUMBER(hexStr[1]) + 16 * CHAR_TO_HEX_NUMBER(hexStr[0]), \
+        CHAR_TO_HEX_NUMBER(hexStr[3]) + 16 * CHAR_TO_HEX_NUMBER(hexStr[2]), \
+        CHAR_TO_HEX_NUMBER(hexStr[5]) + 16 * CHAR_TO_HEX_NUMBER(hexStr[4]), \
+        alpha)
+
 Clay_Dimensions measureText(Clay_StringSlice text, Clay_TextElementConfig* config, void* userData) {
     FontRegistry* registry = (FontRegistry*)userData;
     TTF_Font* font = FontRegistryGetWithKey(registry, config->fontId);
@@ -81,7 +95,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     SDL_SetGPUSwapchainParameters(appContext.device, appContext.window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_IMMEDIATE);
 
     FontRegistryCreate(&fontRegistry, &appContext);
-    FontRegistrySet(&fontRegistry, "Hack-Regular12", font_path, 12.0f);
+    FontRegistrySet(&fontRegistry, "Hack-Regular12", font_path, 14.0f);
     HackRegular12 = FontRegistryGenKey(&fontRegistry, "Hack-Regular12");
 
     InputContextCreate(&inputContext, &appContext, FontRegistryGetWithKey(&fontRegistry, HackRegular12), (float[4]){1.0, 1.0, 1.0, 1.0}, (float[4]){1.0, 1.0, 1.0, 1.0}, (InputContextLayout){.x = 0, .y = 0, .width = 100, .height = 100});
