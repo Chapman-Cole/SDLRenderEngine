@@ -460,8 +460,7 @@ int InputContextCreate(InputContext* inputContext, AppContext* appContext, TTF_F
 
 int InputContextDestroy(InputContext* inputContext) {
     for (int i = 0; i < inputContext->buffer.len; i++) {
-        text_render_info_array_free(&inputContext->buffer.arr[i].renderInfo);
-        DYNAMIC_ARRAY_FREE(inputContext->buffer.arr[i]);
+        text_line_destroy(&inputContext->buffer.arr[i]);
     }
     DYNAMIC_ARRAY_FREE(inputContext->buffer);
     DYNAMIC_ARRAY_FREE(inputContext->modifiedLines);
@@ -470,8 +469,7 @@ int InputContextDestroy(InputContext* inputContext) {
 
 int InputContextClear(InputContext* inputContext) {
     for (int i = 0; i < inputContext->buffer.len; i++) {
-        text_render_info_array_free(&inputContext->buffer.arr[i].renderInfo);
-        DYNAMIC_ARRAY_FREE(inputContext->buffer.arr[i]);
+        text_line_destroy(&inputContext->buffer.arr[i]);
     }
     DYNAMIC_ARRAY_FREE(inputContext->buffer);
     DYNAMIC_ARRAY_FREE(inputContext->modifiedLines);

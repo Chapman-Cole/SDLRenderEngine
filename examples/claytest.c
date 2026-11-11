@@ -55,7 +55,7 @@ void SidebarItemComponent(int id, int fontId) {
 }
 
 #ifdef _WIN32
-static const char* font_path = "C:\\WINDOWS\\FONTS\\CONSOLA.TTF";
+static const char* font_path = "C:\\WINDOWS\\FONTS\\SEGUIVAR.TTF";
 #elif defined(__linux__)
 static const char* font_path = "/usr/share/fonts/source-foundry-hack-fonts/Hack-Regular.ttf";
 #endif
@@ -67,6 +67,7 @@ InputContext inputContext;
 ClayCompositor clayCompositor;
 
 SDL_Mutex* openFileMutex = NULL;
+SDL_Mutex* openFontMutex = NULL;
 
 char file_path[301];
 int file_path_len = 0;
@@ -86,6 +87,30 @@ static void SDLCALL file_dialog_callback(void* userdata, const char* const* file
     file_path_len = SDL_clamp(file_path_len, 0, 300);
 
     SDL_UnlockMutex(openFileMutex);
+}
+
+char open_font_path[301];
+int open_font_path_len = 0;
+
+static void SDLCALL open_font_file_dialog_callback(void* userdata, const char* const* filelist, int filter) {
+    if (!filelist) {
+        SDL_Log("Failed to get the file: %s", SDL_GetError());
+        return;
+    } else if (*filelist == NULL) {
+        SDL_Log("No file selected");
+        return;
+    }
+
+    SDL_LockMutex(openFontMutex);
+    open_font_path_len = SDL_snprintf(open_font_path, 300, "%s", filelist[0]);
+    open_font_path_len = SDL_clamp(open_font_path_len, 0, 300);
+    SDL_UnlockMutex(openFontMutex);
+}
+
+void open_font_hover_callback(Clay_ElementId elementId, Clay_PointerData pointerData, void* userdata) {
+    if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
+        SDL_ShowOpenFileDialog(open_font_file_dialog_callback, NULL, appContext.window, NULL, 0, NULL, false);
+    }
 }
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
@@ -114,6 +139,8 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 
     openFileMutex = SDL_CreateMutex();
 
+    openFontMutex = SDL_CreateMutex();
+
     return SDL_APP_CONTINUE;
 }
 
@@ -127,6 +154,16 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
         SDL_UnlockMutex(openFileMutex);
     }
 
+    if (SDL_TryLockMutex(openFontMutex)) {
+        if (open_font_path_len > 0) {
+            open_font_path[open_font_path_len] = '\0';
+            FontRegistrySet(&fontRegistry, open_font_path, open_font_path, 14.0f);
+            InputContextSetFont(&inputContext, FontRegistryGet(&fontRegistry, open_font_path));
+            open_font_path_len = 0;
+        }
+        SDL_UnlockMutex(openFontMutex);
+    }
+
     AppContextUpdate(&appContext);
     InputContextRefresh(&inputContext);
 
@@ -135,6 +172,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     RenderContextBegin(&renderContext, &appContext, NULL);
 
     Clay_SetLayoutDimensions((Clay_Dimensions){renderContext.renderWidth, renderContext.renderHeight});
+    Clay_SetPointerState((Clay_Vector2){appContext.mousePixelX, appContext.mousePixelY}, appContext.isLeftMouseDown);
 
     Clay_BeginLayout();
 
@@ -145,6 +183,25 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 
     CLAY(CLAY_ID("OuterContainer"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 16}, .backgroundColor = {41, 44, 48, 255}}) {
         CLAY(CLAY_ID("SideBar"), {.layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {.width = CLAY_SIZING_PERCENT(0.25), .height = CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 16}, .cornerRadius = {12.0, 12.0, 12.0, 12.0}, .backgroundColor = {25, 25, 25, 255}}) {
+            CLAY(
+                CLAY_ID("OpenFontButton"), 
+                {.layout = {
+                    .sizing = {
+                        .width = {
+                            .size = {.minMax = {0}}, 
+                            .type = CLAY__SIZING_TYPE_GROW}, 
+                            .height = {.size = {.minMax = {50, 150}}, 
+                            .type = CLAY__SIZING_TYPE_FIXED
+                        }
+                    },
+                    .childAlignment = {.x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER},
+                },
+                .backgroundColor = Clay_Hovered() ? (Clay_Color){255, 116, 108, 255} : (Clay_Color){27, 65, 85, 255},
+                .cornerRadius = {7.0, 7.0, 7.0, 7.0}}) {
+                CLAY_TEXT(CLAY_STRING("Open Font"), {.fontSize = 12, .fontId = HackRegular12, .textColor = {255, 255, 255, 255}});
+                Clay_OnHover(open_font_hover_callback, NULL);
+            }
+            
             CLAY(CLAY_ID("SideBarElement1"), sidebarItemConfig) {
                 static char buff1[200];
                 int buffLen = SDL_snprintf(buff1, 200, "(%d,%d)", inputContext.layout.width, inputContext.layout.height);
@@ -227,10 +284,13 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
 
     InputContextProcessEvent(&inputContext, event);
 
+    AppContextProcessEvent(&appContext, event);
+
     return SDL_APP_CONTINUE;
 }
 
 void SDL_AppQuit(void* appstate, SDL_AppResult result) {
+    SDL_DestroyMutex(openFontMutex);
     SDL_DestroyMutex(openFileMutex);
 
     SDL_StopTextInput(appContext.window);

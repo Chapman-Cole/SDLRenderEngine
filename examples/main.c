@@ -8,7 +8,7 @@
 #include "stdlib.h"
 
 #ifdef _WIN32
-static char font_path[256] = "C:\\WINDOWS\\FONTS\\CONSOLA.TTF";
+static char font_path[256] = "C:\\WINDOWS\\FONTS\\SEGUIVAR.TTF";
 #elif defined(__linux__)
 static char font_path[256] = "/usr/share/fonts/source-foundry-hack-fonts/Hack-Regular.ttf";
 #endif
@@ -201,6 +201,9 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
     }
 
     InputContextProcessEvent(&inputContext, event);
+
+    AppContextProcessEvent(&appContext, event);
+
     return SDL_APP_CONTINUE;
 }
 

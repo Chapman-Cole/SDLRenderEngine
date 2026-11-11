@@ -570,6 +570,14 @@ int AppContextInit(AppContext* app_context, SDL_WindowFlags windowFlags, bool gp
         return -1;
     }
 
+    app_context->isLeftMouseDown = false;
+    app_context->mouseLogicalX = 0;
+    app_context->mouseLogicalY = 0;
+    app_context->mousePixelX = 0;
+    app_context->mousePixelY = 0;
+    app_context->deltaTime = 0;
+    app_context->time = 0;
+
     return 0;
 }
 

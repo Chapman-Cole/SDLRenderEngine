@@ -31,10 +31,11 @@ typedef struct AppContext {
     float displayScale;
     double time;
     double deltaTime;
-    float mouseX;
-    float mouseY;
-    float mouseDeltaX;
-    float mouseDeltaY;
+    float mouseLogicalX;
+    float mouseLogicalY;
+    float mousePixelX;
+    float mousePixelY;
+    bool isLeftMouseDown;
 } AppContext;
 
 #define APP_CONTEXT_DEVICE(appContext) ((appContext).device)
@@ -50,16 +51,34 @@ static inline void AppContextUpdate(AppContext* app_context) {
     app_context->time = (double)SDL_GetTicksNS() / 1'000'000'000.0;
     app_context->deltaTime = app_context->time - prevTime;
 
-    int prevMouseX = app_context->mouseX;
-    int prevMouseY = app_context->mouseY;
+    SDL_GetMouseState(&app_context->mouseLogicalX, &app_context->mouseLogicalY);
 
-    SDL_GetMouseState(&app_context->mouseX, &app_context->mouseY);
+    int logicalWindowSizeX, logicalWindowSizeY;
+    SDL_GetWindowSize(app_context->window, &logicalWindowSizeX, &logicalWindowSizeY);
 
-    if (SDL_GetWindowRelativeMouseMode(app_context->window)) {
-        SDL_GetRelativeMouseState(&app_context->mouseDeltaX, &app_context->mouseDeltaY);
-    } else {
-        app_context->mouseDeltaX = app_context->mouseX - prevMouseX;
-        app_context->mouseDeltaY = app_context->mouseY - prevMouseY;
+    int pixelWindowSizeX, pixelWindowSizeY;
+    SDL_GetWindowSizeInPixels(app_context->window, &pixelWindowSizeX, &pixelWindowSizeY);
+
+    float mouseScaleX = (float)pixelWindowSizeX / (float)logicalWindowSizeX;
+    float mouseScaleY = (float)pixelWindowSizeY / (float)logicalWindowSizeY;
+
+    app_context->mousePixelX = app_context->mouseLogicalX * mouseScaleX;
+    app_context->mousePixelY = app_context->mouseLogicalY * mouseScaleY;
+}
+
+static inline void AppContextProcessEvent(AppContext* app_context, SDL_Event* event) {
+    switch (event->type) {
+        case SDL_EVENT_MOUSE_BUTTON_DOWN: {
+            if (event->button.button == SDL_BUTTON_LEFT) {
+                app_context->isLeftMouseDown = true;
+            }
+        } break;
+
+        case SDL_EVENT_MOUSE_BUTTON_UP: {
+            if (event->button.button == SDL_BUTTON_LEFT) {
+                app_context->isLeftMouseDown = false;
+            }
+        } break;
     }
 }
 
