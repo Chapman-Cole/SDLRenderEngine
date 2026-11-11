@@ -154,10 +154,12 @@ static inline void InputContextUpdateLayout(InputContext* inputContext, InputCon
 }
 
 static inline void InputContextSetFont(InputContext* inputContext, TTF_Font* font) {
-    inputContext->font = font;
-    inputContext->cursorHeight = TTF_GetFontHeight(font);
-    inputContext->line_spacing = TTF_GetFontLineSkip(font);
-    inputContext->flags |= INPUT_CONTEXT_FONT_WAS_CHANGED;
+    if (font != NULL) {
+        inputContext->font = font;
+        inputContext->cursorHeight = TTF_GetFontHeight(font);
+        inputContext->line_spacing = TTF_GetFontLineSkip(font);
+        inputContext->flags |= INPUT_CONTEXT_FONT_WAS_CHANGED;
+    }
 }
 
 static inline void InputContextSetTextColor(InputContext* inputContext, float color[4]) {

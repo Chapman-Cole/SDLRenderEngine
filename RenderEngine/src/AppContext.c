@@ -54,13 +54,13 @@ static inline int AppContextLoadRectanglePipeline(AppContext* app_context) {
         break;
 
     case SDL_GPU_SHADERFORMAT_DXIL:
-        #ifdef _WIN32
+#ifdef _WIN32
         vertex_shader_source_len = rectangle_vertex_dxil_source_len;
         vertex_shader_source = (Uint8*)rectangle_vertex_dxil_source;
 
         fragment_shader_source_len = rectangle_fragment_dxil_source_len;
         fragment_shader_source = (Uint8*)rectangle_fragment_dxil_source;
-        #endif
+#endif
         break;
 
     default:
@@ -155,13 +155,13 @@ static inline int AppContextLoadCirclePipeline(AppContext* app_context) {
         break;
 
     case SDL_GPU_SHADERFORMAT_DXIL:
-        #ifdef _WIN32
+#ifdef _WIN32
         vertex_shader_source_len = circle_vertex_dxil_source_len;
         vertex_shader_source = (Uint8*)circle_vertex_dxil_source;
 
         fragment_shader_source_len = circle_fragment_dxil_source_len;
         fragment_shader_source = (Uint8*)circle_fragment_dxil_source;
-        #endif
+#endif
         break;
 
     default:
@@ -256,13 +256,13 @@ static inline int AppContextLoadTextPipeline(AppContext* app_context) {
         break;
 
     case SDL_GPU_SHADERFORMAT_DXIL:
-        #ifdef _WIN32
+#ifdef _WIN32
         vertex_shader_source_len = text_vertex_dxil_source_len;
         vertex_shader_source = (Uint8*)text_vertex_dxil_source;
 
         fragment_shader_source_len = text_fragment_dxil_source_len;
         fragment_shader_source = (Uint8*)text_fragment_dxil_source;
-        #endif
+#endif
         break;
 
     default:
@@ -379,13 +379,13 @@ static inline int AppContextLoadTextCursorPipeline(AppContext* app_context) {
         break;
 
     case SDL_GPU_SHADERFORMAT_DXIL:
-        #ifdef _WIN32
+#ifdef _WIN32
         vertex_shader_source_len = textcursor_vertex_dxil_source_len;
         vertex_shader_source = (Uint8*)textcursor_vertex_dxil_source;
 
         fragment_shader_source_len = textcursor_fragment_dxil_source_len;
         fragment_shader_source = (Uint8*)textcursor_fragment_dxil_source;
-        #endif
+#endif
         break;
 
     default:
@@ -442,12 +442,7 @@ static inline int AppContextLoadTextCursorPipeline(AppContext* app_context) {
                     .blend_state = DefaultBlendState,
                 }},
             },
-            .vertex_input_state = (SDL_GPUVertexInputState){
-                .num_vertex_attributes = 0,
-                .vertex_attributes = NULL,
-                .num_vertex_buffers = 0,
-                .vertex_buffer_descriptions = NULL
-            },
+            .vertex_input_state = (SDL_GPUVertexInputState){.num_vertex_attributes = 0, .vertex_attributes = NULL, .num_vertex_buffers = 0, .vertex_buffer_descriptions = NULL},
             .rasterizer_state = DefaultRasterizerState,
             .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
             .vertex_shader = textCursorVertexShader,
@@ -476,11 +471,11 @@ int AppContextInit(AppContext* app_context, SDL_WindowFlags windowFlags, bool gp
     SDL_SetBooleanProperty(gpuProps, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, gpuDebugEnabled);
 
     if (app_context->deviceName == APP_CONTEXT_DEVICE_DRIVER_AGNOSTIC) {
-        #ifdef _WIN32
+#ifdef _WIN32
         app_context->deviceName = APP_CONTEXT_DEVICE_DRIVER_VULKAN;
-        #elif defined(__linux__)
+#elif defined(__linux__)
         app_context->deviceName = APP_CONTEXT_DEVICE_DRIVER_VULKAN;
-        #endif
+#endif
     }
 
     SDL_GPUVulkanOptions vkOptions = {0};
@@ -570,6 +565,15 @@ int AppContextInit(AppContext* app_context, SDL_WindowFlags windowFlags, bool gp
         return -1;
     }
 
+    SDL_DisplayID displayId = SDL_GetDisplayForWindow(app_context->window);
+    const SDL_DisplayMode* displayMode = SDL_GetDesktopDisplayMode(displayId);
+    app_context->refreshRate = displayMode->refresh_rate;
+
+    app_context->latencyEaser = 1.0f;
+    app_context->latencyFrameReductionCount = 0;
+    app_context->vsyncEnabled = true;
+    app_context->target_render_time = 1.0f / (float)(APP_CONTEXT_TARGET_FPS_UNLIMITED);
+    app_context->lastRenderFrameTime = 0.0;
     app_context->isLeftMouseDown = false;
     app_context->mouseLogicalX = 0;
     app_context->mouseLogicalY = 0;

@@ -519,7 +519,7 @@ static inline int InputContextBufferInsert(InputContext* inputContext, char* tex
     return 0;
 }
 
-static inline void InputContextCalculateBufferPosFromMousePos(InputContext* inputContext, int* cursorLine, int* cursorIndex) {
+static inline void InputContextCalculateBufferPosFromMousePos(InputContext* inputContext, int* cursorLine, int* cursorIndex, bool isMouseDragging) {
     float mouseX, mouseY;
     SDL_GetMouseState(&mouseX, &mouseY);
 
@@ -532,28 +532,46 @@ static inline void InputContextCalculateBufferPosFromMousePos(InputContext* inpu
     float mouseScaleX = (float)pixelWindowSizeX / (float)logicalWindowSizeX;
     float mouseScaleY = (float)pixelWindowSizeY / (float)logicalWindowSizeY;
 
-    int translatedX = (int)(mouseX * mouseScaleX) - inputContext->layout.x + inputContext->scrollHorizontalOffset;
-    int translatedY = (int)(mouseY * mouseScaleY) - inputContext->layout.y + inputContext->scrollVerticalOffset;
+    int mousePixelX = (int)(mouseScaleX * mouseX);
+    int mousePixelY = (int)(mouseScaleY * mouseY);
+
+    if (isMouseDragging == false) {
+        if (
+            mousePixelX < inputContext->layout.x ||
+            mousePixelY < inputContext->layout.y ||
+            mousePixelX > inputContext->layout.x + inputContext->layout.width ||
+            mousePixelY > inputContext->layout.y + inputContext->layout.height) {
+            return;
+        }
+    }
+
+    int translatedX = mousePixelX - inputContext->layout.x + inputContext->scrollHorizontalOffset;
+    int translatedY = mousePixelY - inputContext->layout.y + inputContext->scrollVerticalOffset;
 
     if (translatedX < 0) {
         translatedX = 0;
     }
 
-    if (translatedY < 0) {
-        translatedY = 0;
-    }
-
     int currLineIndex = (translatedY / inputContext->line_spacing);
-
-    if (currLineIndex >= inputContext->buffer.len) {
-        currLineIndex = inputContext->buffer.len - 1;
+    if (mousePixelY < inputContext->layout.y) {
+        currLineIndex = inputContext->lineRenderIndexStart > 0 ? inputContext->lineRenderIndexStart - 1 : 0;
+        translatedY = 0;
+    } else if (mousePixelY > inputContext->layout.y + inputContext->layout.height) {
+        currLineIndex = inputContext->lineRenderIndexEnd < inputContext->buffer.len - 1 ? inputContext->lineRenderIndexEnd + 1 : inputContext->buffer.len - 1;
+        translatedY = currLineIndex * inputContext->line_spacing;
     }
 
     char* currString = inputContext->buffer.arr[currLineIndex].arr;
     int currStringLen = inputContext->buffer.arr[currLineIndex].len;
 
     int totalWidth, totalHeight;
-    TTF_GetStringSize(inputContext->font, currString, currStringLen, &totalWidth, &totalHeight);
+    if (currStringLen > 0) {
+        TTF_GetStringSize(inputContext->font, currString, currStringLen, &totalWidth, &totalHeight);
+    } else {
+        totalWidth = 0;
+        totalHeight = 0;
+    }
+
     if (translatedX > totalWidth) {
         *cursorLine = currLineIndex;
         *cursorIndex = currStringLen;
@@ -984,7 +1002,7 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
     case SDL_EVENT_MOUSE_BUTTON_DOWN: {
         if (event->button.button == SDL_BUTTON_LEFT) {
             inputContext->mouseLeftDown = true;
-            InputContextCalculateBufferPosFromMousePos(inputContext, &inputContext->cursorLine, &inputContext->cursorIndex);
+            InputContextCalculateBufferPosFromMousePos(inputContext, &inputContext->cursorLine, &inputContext->cursorIndex, false);
 
             inputContext->highlightStartIndex = inputContext->cursorIndex;
             inputContext->highlightStartLineIndex = inputContext->cursorLine;
@@ -1001,7 +1019,7 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
 
     case SDL_EVENT_MOUSE_MOTION: {
         if (inputContext->mouseLeftDown) {
-            InputContextCalculateBufferPosFromMousePos(inputContext, &inputContext->cursorLine, &inputContext->cursorIndex);
+            InputContextCalculateBufferPosFromMousePos(inputContext, &inputContext->cursorLine, &inputContext->cursorIndex, true);
             inputContext->flags |= INPUT_CONTEXT_CURSOR_WAS_MODIFIED;
         }
     } break;
@@ -1079,7 +1097,12 @@ static inline void InputContextUpdateLine(InputContext* inputContext, int index,
     for (int j = 0; j < inputContext->buffer.arr[index].renderInfo.len; j++) {
         inputContext->maxHeight += inputContext->line_spacing;
         int textWidth, textHeight;
-        TTF_GetStringSize(inputContext->font, inputContext->buffer.arr[index].renderInfo.arr[j].text->text, 0, &textWidth, &textHeight);
+        if (inputContext->buffer.arr[index].renderInfo.arr[j].text != NULL) {
+            TTF_GetTextSize(inputContext->buffer.arr[index].renderInfo.arr[j].text, &textWidth, &textHeight);
+        } else {
+            textWidth = 0;
+            textHeight = 0;
+        }
         if (textWidth > inputContext->maxLineWidth) {
             inputContext->maxLineWidth = textWidth;
         }

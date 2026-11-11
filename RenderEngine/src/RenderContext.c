@@ -2,6 +2,11 @@
 
 // If target is NULL, then the swapchain texture will be rendered to
 int RenderContextBegin(RenderContext* renderContext, AppContext* appContext, SDL_GPUTexture* target) {
+    if (appContext->time - appContext->lastRenderFrameTime < appContext->latencyEaser * appContext->target_render_time) {
+        return false;
+    }
+
+    appContext->lastRenderFrameTime = appContext->time;
     renderContext->appContext = appContext;
 
     // First thing that should be done is flushing the app context so that all
@@ -12,14 +17,14 @@ int RenderContextBegin(RenderContext* renderContext, AppContext* appContext, SDL
     renderContext->cmdbuf = SDL_AcquireGPUCommandBuffer(appContext->device);
     if (renderContext->cmdbuf == NULL) {
         SDL_Log("Failed to acquire gpu command buffer: %s", SDL_GetError());
-        return -1;
+        return false;
     }
 
     if (target == NULL) {
         if (!SDL_WaitAndAcquireGPUSwapchainTexture(renderContext->cmdbuf, appContext->window, &renderContext->texture, &renderContext->renderWidth, &renderContext->renderHeight)) {
             SDL_Log("Failed to acquire swapchain: %s", SDL_GetError());
             SDL_CancelGPUCommandBuffer(renderContext->cmdbuf);
-            return -1;
+            return false;
         }
 
         if (renderContext->texture != NULL) {
@@ -35,7 +40,7 @@ int RenderContextBegin(RenderContext* renderContext, AppContext* appContext, SDL
         renderContext->aspectRatio = (float)renderContext->renderHeight / (float)renderContext->renderWidth;
     }
 
-    return 0;
+    return true;
 }
 
 int RenderContextEnd(RenderContext* renderContext) {

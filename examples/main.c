@@ -95,7 +95,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     appContext.windowName = "Renderer";
     appContext.deviceName = APP_CONTEXT_DEVICE_DRIVER_AGNOSTIC;
     AppContextInit(&appContext, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY, false, 1'000'000);
-    SDL_SetGPUSwapchainParameters(appContext.device, appContext.window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_IMMEDIATE);
+    AppContextSetSwapchainParameters(&appContext, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_IMMEDIATE);
 
     FontRegistryCreate(&fontRegistry, &appContext);
     FontRegistrySet(&fontRegistry, "Hack-Regular15", font_path, 15.0f);
@@ -159,17 +159,15 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     RenderContext renderContext = {0};
     renderContext.texture = NULL;
 
-    if (RenderContextBegin(&renderContext, &appContext, NULL) < 0) {
-        exit(-1);
+    if (RenderContextBegin(&renderContext, &appContext, NULL)) {
+        InputContextUpdateLayout(&inputContext, (InputContextLayout){.x = 0, .y = 0, .width = renderContext.renderWidth, .height = renderContext.renderHeight});
+
+        DrawText(&renderContext, &fpsText, (float[2]){renderContext.renderWidth - fpsText.width, renderContext.renderHeight - fpsText.height});
+        DrawText(&renderContext, &fontNameText, (float[2]){0, renderContext.renderHeight - fontNameText.height});
+        DrawInputContext(&renderContext, &inputContext);
+
+        RenderContextEnd(&renderContext);
     }
-
-    InputContextUpdateLayout(&inputContext, (InputContextLayout){.x = 0, .y = 0, .width = renderContext.renderWidth, .height = renderContext.renderHeight});
-
-    DrawText(&renderContext, &fpsText, (float[2]){renderContext.renderWidth - fpsText.width, renderContext.renderHeight - fpsText.height});
-    DrawText(&renderContext, &fontNameText, (float[2]){0, renderContext.renderHeight - fontNameText.height});
-    DrawInputContext(&renderContext, &inputContext);
-
-    RenderContextEnd(&renderContext);
 
     return SDL_APP_CONTINUE;
 }

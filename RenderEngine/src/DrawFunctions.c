@@ -340,95 +340,60 @@ void DrawInputContext(RenderContext* renderContext, InputContext* inputContext) 
     }
 
     // Render highlights here
-    int smallerHighlightLineIndex = SDL_min(inputContext->highlightStartLineIndex, inputContext->cursorLine);
+    int startLineIndex = 0;
+    int endLineIndex = 0;
+    int startIndex = 0;
+    int endIndex = 0;
+    if (inputContext->cursorLine >= inputContext->highlightStartLineIndex) {
+        endLineIndex = inputContext->cursorLine;
+        endIndex = inputContext->cursorIndex;
+        startLineIndex = inputContext->highlightStartLineIndex;
+        startIndex = inputContext->highlightStartIndex;
+    } else {
+        endLineIndex = inputContext->highlightStartLineIndex;
+        endIndex = inputContext->highlightStartIndex;
+        startLineIndex = inputContext->cursorLine;
+        startIndex = inputContext->cursorIndex;
+    }
+
     int highlightOffsetY = inputContext->layout.y;
-    for (int i = 0; i < smallerHighlightLineIndex; i++) {
+    for (int i = 0; i < startLineIndex; i++) {
         highlightOffsetY += inputContext->line_spacing * inputContext->buffer.arr[i].renderInfo.len;
     }
 
-    if (
-        inputContext->highlightStartLineIndex == inputContext->cursorLine &&
-        inputContext->highlightStartIndex != inputContext->cursorIndex) {
-        int lineWidth = 0;
-        int lineHeight = 0;
-        int offsetX = 0;
-        int tempY;
-        if (inputContext->highlightStartIndex > inputContext->cursorIndex) {
-            TTF_GetStringSize(
-                inputContext->font,
-                &inputContext->buffer.arr[inputContext->highlightStartLineIndex].arr[inputContext->cursorIndex],
-                inputContext->highlightStartIndex - inputContext->cursorIndex,
-                &lineWidth, &lineHeight);
-            if (inputContext->cursorIndex > 0) {
-                TTF_GetStringSize(
-                    inputContext->font,
-                    inputContext->buffer.arr[inputContext->highlightStartLineIndex].arr,
-                    inputContext->cursorIndex,
-                    &offsetX, &tempY);
-            }
-        } else if (inputContext->cursorIndex > inputContext->highlightStartIndex) {
-            TTF_GetStringSize(
-                inputContext->font,
-                &inputContext->buffer.arr[inputContext->highlightStartLineIndex].arr[inputContext->highlightStartIndex],
-                inputContext->cursorIndex - inputContext->highlightStartIndex,
-                &lineWidth, &lineHeight);
-            if (inputContext->highlightStartIndex > 0) {
-                TTF_GetStringSize(
-                    inputContext->font,
-                    inputContext->buffer.arr[inputContext->highlightStartLineIndex].arr,
-                    inputContext->highlightStartIndex,
-                    &offsetX, &tempY);
-            }
-        }
-
-        DrawRectangle(
-            renderContext,
-            (float[2]){
-                inputContext->layout.x - inputContext->scrollHorizontalOffset + offsetX,
-                highlightOffsetY - inputContext->scrollVerticalOffset,
-            },
-            (float[2]){lineWidth, inputContext->line_spacing},
-            inputContext->highlightColor);
-    }
-
-    if (inputContext->highlightStartLineIndex > inputContext->cursorLine) {
-        for (int i = inputContext->cursorLine; i <= inputContext->highlightStartLineIndex; i++) {
-            int lineWidth = 0;
-            int lineHeight = 0;
+    if (startLineIndex == endLineIndex) {
+        if (endIndex != startIndex) {
             int offsetX = 0;
-            if (i == inputContext->cursorLine) {
-                int tempY;
+            int tempY;
+            int lineWidth, lineHeight;
+            if (endIndex > startIndex) {
                 TTF_GetStringSize(
                     inputContext->font,
-                    &inputContext->buffer.arr[i].arr[inputContext->cursorIndex],
-                    inputContext->buffer.arr[i].len - inputContext->cursorIndex,
+                    &inputContext->buffer.arr[startLineIndex].arr[startIndex],
+                    endIndex - startIndex,
                     &lineWidth, &lineHeight);
-                if (inputContext->cursorIndex > 0) {
-                    int tempY;
+                if (startIndex > 0) {
                     TTF_GetStringSize(
                         inputContext->font,
-                        inputContext->buffer.arr[i].arr,
-                        inputContext->cursorIndex,
+                        inputContext->buffer.arr[startLineIndex].arr,
+                        startIndex,
                         &offsetX, &tempY);
                 }
-
-            } else if (i == inputContext->highlightStartLineIndex) {
-                int tempY;
-                if (inputContext->highlightStartIndex > 0) {
+            } else {
+                TTF_GetStringSize(
+                    inputContext->font,
+                    &inputContext->buffer.arr[startLineIndex].arr[endIndex],
+                    startIndex - endIndex,
+                    &lineWidth, &lineHeight);
+                if (endIndex > 0) {
                     TTF_GetStringSize(
                         inputContext->font,
-                        inputContext->buffer.arr[inputContext->highlightStartLineIndex].arr,
-                        inputContext->highlightStartIndex,
-                        &lineWidth, &lineHeight);
-                }
-            } else {
-                if (inputContext->buffer.arr[i].len > 0) {
-                    TTF_GetStringSize(inputContext->font, inputContext->buffer.arr[i].arr, inputContext->buffer.arr[i].len, &lineWidth, &lineHeight);
-                } else {
-                    // Empty lines will show highlights, and the width will be that of a space character
-                    TTF_GetStringSize(inputContext->font, " ", 1, &lineWidth, &lineHeight);
+                        inputContext->buffer.arr[startLineIndex].arr,
+                        endIndex,
+                        &offsetX, &tempY);
                 }
             }
+
             DrawRectangle(
                 renderContext,
                 (float[2]){
@@ -437,45 +402,53 @@ void DrawInputContext(RenderContext* renderContext, InputContext* inputContext) 
                 },
                 (float[2]){lineWidth, inputContext->line_spacing},
                 inputContext->highlightColor);
-            highlightOffsetY += inputContext->line_spacing * inputContext->buffer.arr[i].renderInfo.len;
         }
-    } else if (inputContext->highlightStartLineIndex < inputContext->cursorLine) {
-        for (int i = inputContext->highlightStartLineIndex; i <= inputContext->cursorLine; i++) {
-            int lineWidth = 0;
-            int lineHeight = 0;
+    } else {
+        for (int i = startLineIndex; i <= endLineIndex; i++) {
             int offsetX = 0;
-            if (i == inputContext->highlightStartLineIndex) {
-                int tempY;
-                TTF_GetStringSize(
-                    inputContext->font,
-                    &inputContext->buffer.arr[i].arr[inputContext->highlightStartIndex],
-                    inputContext->buffer.arr[i].len - inputContext->highlightStartIndex,
-                    &lineWidth, &lineHeight);
-                if (inputContext->highlightStartIndex > 0) {
-                    int tempY;
+            int tempY;
+            int lineWidth, lineHeight;
+            if (i == startLineIndex) {
+                if (inputContext->buffer.arr[i].len - startIndex > 0) {
+                    TTF_GetStringSize(
+                        inputContext->font,
+                        &inputContext->buffer.arr[i].arr[startIndex],
+                        inputContext->buffer.arr[i].len - startIndex,
+                        &lineWidth, &lineHeight);
+                } else {
+                    highlightOffsetY += inputContext->line_spacing * inputContext->buffer.arr[i].renderInfo.len;
+                    continue;
+                }
+
+                if (startIndex > 0) {
                     TTF_GetStringSize(
                         inputContext->font,
                         inputContext->buffer.arr[i].arr,
-                        inputContext->highlightStartIndex,
+                        startIndex,
                         &offsetX, &tempY);
                 }
-            } else if (i == inputContext->cursorLine) {
-                int tempY;
-                if (inputContext->cursorIndex > 0) {
+            } else if (i == endLineIndex) {
+                if (endIndex > 0) {
                     TTF_GetStringSize(
                         inputContext->font,
-                        inputContext->buffer.arr[inputContext->cursorLine].arr,
-                        inputContext->cursorIndex,
+                        inputContext->buffer.arr[i].arr,
+                        endIndex,
                         &lineWidth, &lineHeight);
+                } else {
+                    break;
                 }
             } else {
                 if (inputContext->buffer.arr[i].len > 0) {
-                    TTF_GetStringSize(inputContext->font, inputContext->buffer.arr[i].arr, inputContext->buffer.arr[i].len, &lineWidth, &lineHeight);
+                    TTF_GetStringSize(
+                        inputContext->font,
+                        inputContext->buffer.arr[i].arr,
+                        inputContext->buffer.arr[i].len,
+                        &lineWidth, &lineHeight);
                 } else {
-                    // Empty lines will show highlights, and the width will be that of a space character
                     TTF_GetStringSize(inputContext->font, " ", 1, &lineWidth, &lineHeight);
                 }
             }
+
             DrawRectangle(
                 renderContext,
                 (float[2]){
