@@ -441,6 +441,11 @@ int InputContextCreate(InputContext* inputContext, AppContext* appContext, TTF_F
     inputContext->app_context = appContext;
     inputContext->layout = layout;
 
+    inputContext->cursorBlinkDelay = 0.5f;
+    inputContext->cursorBlinkTimer = 0.0f;
+
+    inputContext->textCursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_TEXT);
+
     // This will set all the flags to false initially
     inputContext->flags = (uint32_t)(0);
 
@@ -464,6 +469,8 @@ int InputContextDestroy(InputContext* inputContext) {
     }
     DYNAMIC_ARRAY_FREE(inputContext->buffer);
     DYNAMIC_ARRAY_FREE(inputContext->modifiedLines);
+
+    SDL_DestroyCursor(inputContext->textCursor);
     return 0;
 }
 
@@ -523,17 +530,8 @@ static inline void InputContextCalculateBufferPosFromMousePos(InputContext* inpu
     float mouseX, mouseY;
     SDL_GetMouseState(&mouseX, &mouseY);
 
-    int logicalWindowSizeX, logicalWindowSizeY;
-    SDL_GetWindowSize(inputContext->app_context->window, &logicalWindowSizeX, &logicalWindowSizeY);
-
-    int pixelWindowSizeX, pixelWindowSizeY;
-    SDL_GetWindowSizeInPixels(inputContext->app_context->window, &pixelWindowSizeX, &pixelWindowSizeY);
-
-    float mouseScaleX = (float)pixelWindowSizeX / (float)logicalWindowSizeX;
-    float mouseScaleY = (float)pixelWindowSizeY / (float)logicalWindowSizeY;
-
-    int mousePixelX = (int)(mouseScaleX * mouseX);
-    int mousePixelY = (int)(mouseScaleY * mouseY);
+    int mousePixelX = (int)(inputContext->app_context->displayScale * mouseX);
+    int mousePixelY = (int)(inputContext->app_context->displayScale * mouseY);
 
     if (isMouseDragging == false) {
         if (
@@ -552,13 +550,20 @@ static inline void InputContextCalculateBufferPosFromMousePos(InputContext* inpu
         translatedX = 0;
     }
 
+    int maximumDraggableLenY = SDL_min(
+        inputContext->layout.y + inputContext->maxHeight - inputContext->scrollVerticalOffset,
+        inputContext->layout.y + inputContext->layout.height);
+
     int currLineIndex = (translatedY / inputContext->line_spacing);
     if (mousePixelY < inputContext->layout.y) {
         currLineIndex = inputContext->lineRenderIndexStart > 0 ? inputContext->lineRenderIndexStart - 1 : 0;
         translatedY = 0;
-    } else if (mousePixelY > inputContext->layout.y + inputContext->layout.height) {
+    } else if (mousePixelY > maximumDraggableLenY) {
         currLineIndex = inputContext->lineRenderIndexEnd < inputContext->buffer.len - 1 ? inputContext->lineRenderIndexEnd + 1 : inputContext->buffer.len - 1;
         translatedY = currLineIndex * inputContext->line_spacing;
+    } else if (currLineIndex >= inputContext->buffer.len) {
+        currLineIndex = inputContext->buffer.len - 1;
+        currLineIndex = currLineIndex > 0 ? currLineIndex : 0;
     }
 
     char* currString = inputContext->buffer.arr[currLineIndex].arr;
@@ -620,7 +625,10 @@ static inline void InputContextCalculateBufferPosFromMousePos(InputContext* inpu
         }
 
         if (prevLineWidth <= translatedX && lineWidth > translatedX) {
-            byteOffsetTracker = prevByteOffsetTracker;
+            int characterDelta = lineWidth - prevLineWidth;
+            if (translatedX - prevLineWidth <= characterDelta / 2) {
+                byteOffsetTracker = prevByteOffsetTracker;
+            }
             break;
         }
     }
@@ -1018,6 +1026,25 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
     } break;
 
     case SDL_EVENT_MOUSE_MOTION: {
+        float mouseX = inputContext->app_context->displayScale * event->motion.x;
+        float mouseY = inputContext->app_context->displayScale * event->motion.y;
+
+        if (
+            mouseX - inputContext->layout.x > 0 &&
+            mouseX - inputContext->layout.x < inputContext->layout.width &&
+            mouseY - inputContext->layout.y > 0 &&
+            mouseY - inputContext->layout.y < inputContext->layout.height) {
+            if (inputContext->cursorWasInBounds == false) {
+                inputContext->cursorWasInBounds = true;
+                SDL_SetCursor(inputContext->textCursor);
+            }
+        } else {
+            if (inputContext->cursorWasInBounds == true) {
+                inputContext->cursorWasInBounds = false;
+                SDL_SetCursor(SDL_GetDefaultCursor());
+            }
+        }
+
         if (inputContext->mouseLeftDown) {
             InputContextCalculateBufferPosFromMousePos(inputContext, &inputContext->cursorLine, &inputContext->cursorIndex, true);
             inputContext->flags |= INPUT_CONTEXT_CURSOR_WAS_MODIFIED;
@@ -1134,6 +1161,10 @@ int InputContextRefresh(InputContext* inputContext) {
             }
         }
 
+        if (inputContext->layoutMode != INPUT_CONTEXT_LAYOUT_MODE_WRAP) {
+            inputContext->maxHeight = (int)inputContext->buffer.len * inputContext->line_spacing;
+        }
+
         inputContext->scrollMaxHorizontalOffset = inputContext->maxLineWidth - inputContext->layout.width;
         if (inputContext->scrollMaxHorizontalOffset < 0) {
             inputContext->scrollMaxHorizontalOffset = 0;
@@ -1153,6 +1184,7 @@ int InputContextRefresh(InputContext* inputContext) {
         ((inputContext->flags & INPUT_CONTEXT_LAYOUT_WAS_MODIFIED) &&
          inputContext->layoutMode == INPUT_CONTEXT_LAYOUT_MODE_WRAP)) {
         int tempInt;
+        inputContext->cursorBlinkTimer = 0.0f; // Reset blink timer so that the cursor stays visible while editing text or moving cursor around
 
         // If statement checks for 0 because the line strings are not null terminated and most of the TTF functions treat
         // a length of 0 as meaning the string is null terminated

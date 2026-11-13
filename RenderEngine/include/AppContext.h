@@ -53,17 +53,17 @@ typedef struct AppContext {
 // Forces the app context to immediately submit all pending gpu uploads
 #define APP_CONTEXT_FLUSH_TRANSFER_CONTEXT(appContext) (GPUTransferContextSubmit(&((appContext).transferContext)));
 
-static inline float __app_context_calculate_latency_easer(AppContext* app_context, int num_frames) {
+static inline float __app_context_calculate_latency_easer(AppContext* app_context, float num_frames) {
     // Basic idea here is to calculate the percentage of the new target fps compared to the old
     // target fps (assuming the target fps is the refreshRate), which would be (refreshRate - numFrames) / refreshRate
     // However, since the latencyEaser is multiplied by the target_render_time, this has to be
     // 1 over the previous value, giving:
-    return (float)(app_context->refreshRate) / (float)(app_context->refreshRate - (float)num_frames);
+    return (float)(app_context->refreshRate) / (float)(app_context->refreshRate - num_frames);
 }
 
 // A latency easing of 1-3 frames (generally higher for a larger refresh rate) should help
 // quite a bit with input latency when vsync is enabled.
-static inline void AppContextSetLatencyEasing(AppContext* app_context, int num_frames) {
+static inline void AppContextSetLatencyEasing(AppContext* app_context, float num_frames) {
     app_context->latencyFrameReductionCount = num_frames;
     app_context->latencyEaser = __app_context_calculate_latency_easer(app_context, num_frames);
 }
@@ -122,6 +122,10 @@ static inline void AppContextProcessEvent(AppContext* app_context, SDL_Event* ev
             app_context->target_render_time = 1.0f / displayMode->refresh_rate;
             app_context->latencyEaser = __app_context_calculate_latency_easer(app_context, app_context->latencyFrameReductionCount);
         }
+    } break;
+
+    case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED: {
+        app_context->displayScale = SDL_GetWindowDisplayScale(app_context->window);
     } break;
     }
 }

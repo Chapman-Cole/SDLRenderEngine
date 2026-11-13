@@ -72,7 +72,7 @@ void* MemoryHeap_alloc(MemoryHeap* heap, size_t size) {
     }
 
     MemoryHeapBlock newBlock = {0};
-    newBlock.capacity = (3 * heap->arr[0].capacity) / 2;
+    newBlock.capacity = 2 * heap->arr[0].capacity;
     newBlock.base = SDL_malloc(newBlock.capacity);
     newBlock.tracker = newBlock.base;
     newBlock.queue_len = 0;
@@ -126,7 +126,7 @@ void* MemoryHeap_aligned_alloc(MemoryHeap* heap, size_t size, size_t align_to) {
     }
 
     MemoryHeapBlock newBlock = {0};
-    newBlock.capacity = (3 * heap->arr[0].capacity) / 2;
+    newBlock.capacity = 2 * heap->arr[0].capacity;
     newBlock.base = SDL_malloc(newBlock.capacity);
     newBlock.tracker = newBlock.base;
     newBlock.queue_len = 0;

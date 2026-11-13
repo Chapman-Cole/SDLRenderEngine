@@ -41,7 +41,7 @@ void HandleClayErrors(Clay_ErrorData errorData) {
 
 Clay_ElementDeclaration sidebarItemConfig = {
     .layout = {
-        .sizing = {.width = {.size = {.minMax = {0}}, .type = CLAY__SIZING_TYPE_GROW}, .height = {.size = {.minMax = {50, 150}}, .type = CLAY__SIZING_TYPE_FIXED}},
+        .sizing = {.width = {.size = {.minMax = {0}}, .type = CLAY__SIZING_TYPE_GROW}, .height = {.size = {.minMax = {50, 250}}, .type = CLAY__SIZING_TYPE_FIXED}},
         .childAlignment = {.x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER},
     },
     .backgroundColor = {27, 65, 85, 255},
@@ -118,13 +118,13 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     appContext.deviceName = APP_CONTEXT_DEVICE_DRIVER_AGNOSTIC;
     AppContextInit(&appContext, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY, false, 1'000'00);
     AppContextSetSwapchainParameters(&appContext, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_VSYNC);
-    AppContextSetLatencyEasing(&appContext, 2);
+    AppContextSetLatencyEasing(&appContext, 3);
 
     FontRegistryCreate(&fontRegistry, &appContext);
     FontRegistrySet(&fontRegistry, "Hack-Regular12", font_path, 14.0f);
     HackRegular12 = FontRegistryGenKey(&fontRegistry, "Hack-Regular12");
 
-    InputContextCreate(&inputContext, &appContext, FontRegistryGetWithKey(&fontRegistry, HackRegular12), (float[4]){1.0, 1.0, 1.0, 1.0}, (float[4]){1.0, 1.0, 1.0, 1.0}, (InputContextLayout){.x = 0, .y = 0, .width = 100, .height = 100});
+    InputContextCreate(&inputContext, &appContext, FontRegistryGetWithKey(&fontRegistry, HackRegular12), (float[4]){1.0, 1.0, 1.0, 1.0}, (float[4]){0.80, 0.80, 0.80, 1.0}, (InputContextLayout){.x = 0, .y = 0, .width = 100, .height = 100});
     InputContextSetLayoutMode(&inputContext, INPUT_CONTEXT_LAYOUT_MODE_SCROLLABLE);
     InputContextSetTabWidth(&inputContext, 4);
 

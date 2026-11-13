@@ -120,6 +120,10 @@ typedef struct InputContext {
     bool mouseLeftDown;
     int highlightStartIndex;
     int highlightStartLineIndex;
+    float cursorBlinkDelay;
+    float cursorBlinkTimer;
+    bool cursorWasInBounds;
+    SDL_Cursor* textCursor;
 } InputContext;
 
 // For use with SDL_PollEvent (or inside SDL_AppEvent callback). Also make sure to call
@@ -169,6 +173,13 @@ static inline void InputContextSetTextColor(InputContext* inputContext, float co
     inputContext->textColor[3] = color[3];
 }
 
+static inline void InputContextSetTextCursorColor(InputContext* inputContext, float color[4]) {
+    inputContext->cursorColor[0] = color[0];
+    inputContext->cursorColor[1] = color[1];
+    inputContext->cursorColor[2] = color[2];
+    inputContext->cursorColor[3] = color[3];
+}
+
 static inline void InputContextSetLayoutMode(InputContext* inputContext, InputContextLayoutMode mode) {
     inputContext->layoutMode = mode;
 }
@@ -186,6 +197,10 @@ static inline void InputContextSetHighlightColor(InputContext* inputContext, flo
     inputContext->highlightColor[1] = color[1];
     inputContext->highlightColor[2] = color[2];
     inputContext->highlightColor[3] = color[3];
+}
+
+static inline void InputContextSetBlinkDelay(InputContext* inputContext, float blink_delay) {
+    inputContext->cursorBlinkDelay = blink_delay;
 }
 
 #endif

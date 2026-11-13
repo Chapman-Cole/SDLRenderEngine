@@ -2,9 +2,7 @@
 #include "DynamicArray.h"
 #include <stddef.h>
 
-// It may be ideal to change this size later on, but for now
-// a megabyte should be a good transfer buffer starting size
-#define TRANSFER_BUFFER_SIZE 1'000'000
+#define TRANSFER_BUFFER_SIZE 500'000
 
 int GPUTransferContextCreate(GPUTransferContext* transferContext, SDL_GPUDevice* device, size_t arenaSize) {
     MemoryArena_create(&transferContext->dataStagingArena, arenaSize);

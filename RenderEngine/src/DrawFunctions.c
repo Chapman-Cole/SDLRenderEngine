@@ -462,46 +462,51 @@ void DrawInputContext(RenderContext* renderContext, InputContext* inputContext) 
     }
 
     // Render the cursor here
-    float cursor_width = 5.0f;
+    inputContext->cursorBlinkTimer += renderContext->appContext->deltaTime;
+    if (inputContext->cursorBlinkTimer < inputContext->cursorBlinkDelay) {
+        float cursor_width = 5.0f;
 
-    SDL_BindGPUGraphicsPipeline(
-        renderContext->renderPass,
-        renderContext->appContext->builtinPipelines[BUILTIN_PIPELINE_TEXT_CURSOR]);
-
-    TextCursorVertexUniform cursorVertexUniform = (TextCursorVertexUniform){
-        .position = (float2){
-            inputContext->cursorX + inputContext->layout.x - inputContext->scrollHorizontalOffset,
-            inputContext->cursorY + inputContext->layout.y - inputContext->scrollVerticalOffset,
-        },
-        .size = (float2){cursor_width, (float)inputContext->cursorHeight},
-        .windowDims = (float2){renderContext->renderWidth, renderContext->renderHeight},
-        .pad = {0},
-    };
-
-    SDL_PushGPUVertexUniformData(renderContext->cmdbuf, 0, &cursorVertexUniform, sizeof(cursorVertexUniform));
-
-    TextCursorFragmentUniform cursorFragmentUniform = (TextCursorFragmentUniform){
-        .color = (float4){
-            inputContext->cursorColor[0],
-            inputContext->cursorColor[1],
-            inputContext->cursorColor[2],
-            inputContext->cursorColor[3],
-        },
-    };
-
-    SDL_PushGPUFragmentUniformData(renderContext->cmdbuf, 0, &cursorFragmentUniform, sizeof(cursorFragmentUniform));
-
-    SDL_DrawGPUPrimitives(renderContext->renderPass, 6, 1, 0, 0);
-
-    if (scissorStateWasUpdated == true) {
-        // Make sure the scissor goes back to the size of the render target
-        SDL_SetGPUScissor(
+        SDL_BindGPUGraphicsPipeline(
             renderContext->renderPass,
-            &(SDL_Rect){
-                .x = 0,
-                .y = 0,
-                .w = renderContext->renderWidth,
-                .h = renderContext->renderHeight,
-            });
+            renderContext->appContext->builtinPipelines[BUILTIN_PIPELINE_TEXT_CURSOR]);
+
+        TextCursorVertexUniform cursorVertexUniform = (TextCursorVertexUniform){
+            .position = (float2){
+                inputContext->cursorX + inputContext->layout.x - inputContext->scrollHorizontalOffset,
+                inputContext->cursorY + inputContext->layout.y - inputContext->scrollVerticalOffset,
+            },
+            .size = (float2){cursor_width, (float)inputContext->cursorHeight},
+            .windowDims = (float2){renderContext->renderWidth, renderContext->renderHeight},
+            .pad = {0},
+        };
+
+        SDL_PushGPUVertexUniformData(renderContext->cmdbuf, 0, &cursorVertexUniform, sizeof(cursorVertexUniform));
+
+        TextCursorFragmentUniform cursorFragmentUniform = (TextCursorFragmentUniform){
+            .color = (float4){
+                inputContext->cursorColor[0],
+                inputContext->cursorColor[1],
+                inputContext->cursorColor[2],
+                inputContext->cursorColor[3],
+            },
+        };
+
+        SDL_PushGPUFragmentUniformData(renderContext->cmdbuf, 0, &cursorFragmentUniform, sizeof(cursorFragmentUniform));
+
+        SDL_DrawGPUPrimitives(renderContext->renderPass, 6, 1, 0, 0);
+
+        if (scissorStateWasUpdated == true) {
+            // Make sure the scissor goes back to the size of the render target
+            SDL_SetGPUScissor(
+                renderContext->renderPass,
+                &(SDL_Rect){
+                    .x = 0,
+                    .y = 0,
+                    .w = renderContext->renderWidth,
+                    .h = renderContext->renderHeight,
+                });
+        }
+    } else if (inputContext->cursorBlinkTimer >= 2.0f * inputContext->cursorBlinkDelay) {
+        inputContext->cursorBlinkTimer = 0.0f;
     }
 }

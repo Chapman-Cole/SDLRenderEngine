@@ -1,9 +1,9 @@
 #ifndef GPUTRANSFERCONTEXT_H
 #define GPUTRANSFERCONTEXT_H
 
+#include "GPUBufferContext.h"
 #include "MemoryArena.h"
 #include "SDL3/SDL.h"
-#include "GPUBufferContext.h"
 
 typedef struct TransferContextData {
     void* buffer;
@@ -47,7 +47,8 @@ typedef struct GPUTransferContext {
     SDL_GPUDevice* device;
 } GPUTransferContext;
 
-#define TRANSFER_CONTEXT_DATA(data, data_size) (TransferContextData){.buffer = data, .buffer_size = data_size, ._stagingBuffer = false}
+#define TRANSFER_CONTEXT_DATA(data, data_size) \
+    (TransferContextData) { .buffer = data, .buffer_size = data_size, ._stagingBuffer = false }
 
 int GPUTransferContextCreate(GPUTransferContext* transferContext, SDL_GPUDevice* device, size_t arenaSize);
 
