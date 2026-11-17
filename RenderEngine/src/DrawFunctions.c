@@ -271,7 +271,7 @@ void DrawInputContext(RenderContext* renderContext, InputContext* inputContext) 
         renderContext->appContext->builtinPipelines[BUILTIN_PIPELINE_TEXT]);
 
     int offsetY = inputContext->layout.y + inputContext->lineRenderOffsetY;
-    for (int i = inputContext->lineRenderIndexStart; i < inputContext->lineRenderIndexEnd; i++) {
+    for (int i = inputContext->lineRenderIndexStart; i <= inputContext->lineRenderIndexEnd; i++) {
         for (int j = 0; j < inputContext->buffer.arr[i].renderInfo.len; j++) {
             TextRenderInfo currInfo = inputContext->buffer.arr[i].renderInfo.arr[j];
 
@@ -404,7 +404,17 @@ void DrawInputContext(RenderContext* renderContext, InputContext* inputContext) 
                 inputContext->highlightColor);
         }
     } else {
-        for (int i = startLineIndex; i <= endLineIndex; i++) {
+        int highlightRenderIndexStart;
+        if (startLineIndex > inputContext->lineRenderIndexStart) {
+            highlightRenderIndexStart = startLineIndex;
+        } else {
+            highlightRenderIndexStart = inputContext->lineRenderIndexStart;
+            highlightOffsetY += inputContext->line_spacing * (inputContext->lineRenderIndexStart - startLineIndex);
+        }
+
+        int highlightRenderIndexEnd = SDL_min(endLineIndex, inputContext->lineRenderIndexEnd);
+
+        for (int i = highlightRenderIndexStart; i <= highlightRenderIndexEnd; i++) {
             int offsetX = 0;
             int tempY;
             int lineWidth, lineHeight;
@@ -462,8 +472,8 @@ void DrawInputContext(RenderContext* renderContext, InputContext* inputContext) 
     }
 
     // Render the cursor here
-    inputContext->cursorBlinkTimer += renderContext->appContext->deltaTime;
-    if (inputContext->cursorBlinkTimer < inputContext->cursorBlinkDelay) {
+    inputContext->cursorBlinkTimer += renderContext->appContext->frameDeltaTime;
+    if (inputContext->cursorBlinkTimer < inputContext->cursorBlinkDelay && inputContext->inputContextHasFocus) {
         float cursor_width = 5.0f;
 
         SDL_BindGPUGraphicsPipeline(

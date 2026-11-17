@@ -100,8 +100,6 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     FontRegistryCreate(&fontRegistry, &appContext);
     FontRegistrySet(&fontRegistry, "Hack-Regular15", font_path, 15.0f);
 
-    SDL_StartTextInput(appContext.window);
-
     InputContextCreate(&inputContext, &appContext, FontRegistryGet(&fontRegistry, "Hack-Regular15"), (float[4]){1.0, 1.0, 1.0, 1.0f}, (float[4]){1.0, 1.0, 1.0, 1.0f}, (InputContextLayout){.x = 0, .y = 0, .width = 1000, .height = 1000});
     InputContextSetLayoutMode(&inputContext, INPUT_CONTEXT_LAYOUT_MODE_SCROLLABLE);
 
@@ -212,8 +210,6 @@ void SDL_AppQuit(void* appstate, SDL_AppResult result) {
     GPUTextDestroy(&fontNameText);
 
     InputContextDestroy(&inputContext);
-
-    SDL_StopTextInput(appContext.window);
 
     FontRegistryDestroy(&fontRegistry);
 

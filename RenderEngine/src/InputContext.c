@@ -424,6 +424,9 @@ int InputContextCreate(InputContext* inputContext, AppContext* appContext, TTF_F
     set_float4_with_hex_color(inputContext->highlightColor, "90D5FF", (char)(0.4f * 255.0f));
     inputContext->mouseLeftDown = false;
 
+    inputContext->inputContextHasFocus = false;
+    inputContext->lShiftDown = false;
+
     inputContext->highlightStartIndex = 0;
     inputContext->highlightStartLineIndex = 0;
 
@@ -526,22 +529,12 @@ static inline int InputContextBufferInsert(InputContext* inputContext, char* tex
     return 0;
 }
 
-static inline void InputContextCalculateBufferPosFromMousePos(InputContext* inputContext, int* cursorLine, int* cursorIndex, bool isMouseDragging) {
+static inline void InputContextCalculateBufferPosFromMousePos(InputContext* inputContext, int* cursorLine, int* cursorIndex) {
     float mouseX, mouseY;
     SDL_GetMouseState(&mouseX, &mouseY);
 
     int mousePixelX = (int)(inputContext->app_context->displayScale * mouseX);
     int mousePixelY = (int)(inputContext->app_context->displayScale * mouseY);
-
-    if (isMouseDragging == false) {
-        if (
-            mousePixelX < inputContext->layout.x ||
-            mousePixelY < inputContext->layout.y ||
-            mousePixelX > inputContext->layout.x + inputContext->layout.width ||
-            mousePixelY > inputContext->layout.y + inputContext->layout.height) {
-            return;
-        }
-    }
 
     int translatedX = mousePixelX - inputContext->layout.x + inputContext->scrollHorizontalOffset;
     int translatedY = mousePixelY - inputContext->layout.y + inputContext->scrollVerticalOffset;
@@ -550,20 +543,39 @@ static inline void InputContextCalculateBufferPosFromMousePos(InputContext* inpu
         translatedX = 0;
     }
 
+    float v_scroll_speed = 0.4f * (float)(inputContext->layout.height);
+
     int maximumDraggableLenY = SDL_min(
-        inputContext->layout.y + inputContext->maxHeight - inputContext->scrollVerticalOffset,
+        inputContext->layout.y + inputContext->maxHeight,
         inputContext->layout.y + inputContext->layout.height);
 
     int currLineIndex = (translatedY / inputContext->line_spacing);
     if (mousePixelY < inputContext->layout.y) {
-        currLineIndex = inputContext->lineRenderIndexStart > 0 ? inputContext->lineRenderIndexStart - 1 : 0;
-        translatedY = 0;
+        InputContextSetVerticalScrollOffset(
+            inputContext,
+            inputContext->scrollVerticalOffset + v_scroll_speed * inputContext->app_context->deltaTime * -1.0f * (1.0f - (float)(mousePixelY) / (float)(inputContext->layout.y)));
+        currLineIndex = inputContext->lineRenderIndexStart;
     } else if (mousePixelY > maximumDraggableLenY) {
-        currLineIndex = inputContext->lineRenderIndexEnd < inputContext->buffer.len - 1 ? inputContext->lineRenderIndexEnd + 1 : inputContext->buffer.len - 1;
-        translatedY = currLineIndex * inputContext->line_spacing;
+        InputContextSetVerticalScrollOffset(
+            inputContext,
+            inputContext->scrollVerticalOffset + v_scroll_speed * inputContext->app_context->deltaTime * (float)(mousePixelY - maximumDraggableLenY) / (float)(inputContext->app_context->windowHeightPixels - maximumDraggableLenY));
+        currLineIndex = inputContext->lineRenderIndexEnd;
     } else if (currLineIndex >= inputContext->buffer.len) {
         currLineIndex = inputContext->buffer.len - 1;
         currLineIndex = currLineIndex > 0 ? currLineIndex : 0;
+    }
+
+    float h_scroll_speed = 0.6f * inputContext->layout.width;
+
+    if (mousePixelX < inputContext->layout.x) {
+        InputContextSetHorizontalScrollOffset(
+            inputContext,
+            inputContext->scrollHorizontalOffset + h_scroll_speed * inputContext->app_context->deltaTime * -1.0f * (1.0f - (float)(mousePixelX) / (float)(inputContext->layout.x)));
+    } else if (mousePixelX > inputContext->layout.x + inputContext->layout.width) {
+        float x_delta = inputContext->layout.x + inputContext->layout.width;
+        InputContextSetHorizontalScrollOffset(
+            inputContext,
+            inputContext->scrollHorizontalOffset + h_scroll_speed * inputContext->app_context->deltaTime * (float)(mousePixelX - x_delta) / (float)(inputContext->app_context->windowWidthPixels - x_delta));
     }
 
     char* currString = inputContext->buffer.arr[currLineIndex].arr;
@@ -637,6 +649,42 @@ static inline void InputContextCalculateBufferPosFromMousePos(InputContext* inpu
     *cursorIndex = byteOffsetTracker;
 }
 
+static inline void UpdateRenderIndexBounds(InputContext* inputContext) {
+    int offsetY = 0;
+    inputContext->lineRenderOffsetY = 0;
+    inputContext->lineRenderIndexStart = 0;
+    inputContext->lineRenderIndexEnd = 0;
+    for (int i = 0; i < inputContext->buffer.len; i++) {
+        inputContext->lineRenderIndexEnd = i + 1;
+        if (offsetY - inputContext->scrollVerticalOffset < -inputContext->line_spacing) {
+            inputContext->lineRenderIndexStart = i + 1;
+            inputContext->lineRenderOffsetY += inputContext->line_spacing * inputContext->buffer.arr[i].renderInfo.len;
+        } else if ((offsetY + inputContext->line_spacing) - inputContext->scrollVerticalOffset > inputContext->layout.height) {
+            break;
+        }
+        offsetY += inputContext->buffer.arr[i].renderInfo.len * inputContext->line_spacing;
+    }
+
+    if (inputContext->lineRenderIndexEnd >= inputContext->buffer.len) {
+        inputContext->lineRenderIndexEnd = inputContext->buffer.len > 0 ? inputContext->buffer.len - 1 : 0;
+    }
+}
+
+static inline void InputContextUpdateModifiedLineIndicesAfterRemoval(InputContext* inputContext, int index) {
+    // Make sure to update any indices that come after inputContext->cursorLine
+    // to be one less since they all got shifted left in the array after the removal of the line
+    for (int i = 0; i < inputContext->modifiedLines.len; i++) {
+        if (inputContext->modifiedLines.arr[i] > index) {
+            if (inputContext->modifiedLines.arr[i] > 0) {
+                inputContext->modifiedLines.arr[i]--;
+            }
+        } else if (inputContext->modifiedLines.arr[i] == index) {
+            DYNAMIC_ARRAY_REMOVE(inputContext->modifiedLines, i);
+            i--;
+        }
+    }
+}
+
 int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
     switch (event->type) {
     case SDL_EVENT_TEXT_INPUT: {
@@ -650,49 +698,96 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
 
         switch (event->key.key) {
         case SDLK_BACKSPACE: {
-            if (inputContext->cursorIndex == 0 && inputContext->cursorLine > 0) {
-                inputContext->cursorIndex = inputContext->buffer.arr[inputContext->cursorLine - 1].len;
+            if (inputContext->cursorIndex == inputContext->highlightStartIndex && inputContext->cursorLine == inputContext->highlightStartLineIndex) {
+                if (inputContext->cursorIndex == 0 && inputContext->cursorLine > 0) {
+                    inputContext->cursorIndex = inputContext->buffer.arr[inputContext->cursorLine - 1].len;
 
-                if (inputContext->buffer.arr[inputContext->cursorLine].len > 0) {
-                    DYNAMIC_ARRAY_INSERT_ARRAY(
-                        inputContext->buffer.arr[inputContext->cursorLine - 1],
-                        inputContext->buffer.arr[inputContext->cursorLine],
-                        inputContext->buffer.arr[inputContext->cursorLine - 1].len);
-                }
-
-                text_line_destroy(&inputContext->buffer.arr[inputContext->cursorLine]);
-                DYNAMIC_ARRAY_REMOVE(inputContext->buffer, inputContext->cursorLine);
-
-                // Make sure to update any indices that come after inputContext->cursorLine
-                // to be one less since they all got shifted left in the array after the removal of the line
-                for (int i = 0; i < inputContext->modifiedLines.len; i++) {
-                    if (inputContext->modifiedLines.arr[i] > inputContext->cursorLine) {
-                        if (inputContext->modifiedLines.arr[i] > 0) {
-                            inputContext->modifiedLines.arr[i]--;
-                        }
-                    } else if (inputContext->modifiedLines.arr[i] == inputContext->cursorLine) {
-                        DYNAMIC_ARRAY_REMOVE(inputContext->modifiedLines, i);
-                        i--;
+                    if (inputContext->buffer.arr[inputContext->cursorLine].len > 0) {
+                        DYNAMIC_ARRAY_INSERT_ARRAY(
+                            inputContext->buffer.arr[inputContext->cursorLine - 1],
+                            inputContext->buffer.arr[inputContext->cursorLine],
+                            inputContext->buffer.arr[inputContext->cursorLine - 1].len);
                     }
+
+                    text_line_destroy(&inputContext->buffer.arr[inputContext->cursorLine]);
+                    DYNAMIC_ARRAY_REMOVE(inputContext->buffer, inputContext->cursorLine);
+
+                    InputContextUpdateModifiedLineIndicesAfterRemoval(inputContext, inputContext->cursorLine);
+                    InputContextModifiedLinesAppend(inputContext, inputContext->cursorLine - 1);
+
+                    inputContext->cursorLine--;
+                    inputContext->flags |= INPUT_CONTEXT_BUFFER_WAS_MODIFIED;
+                } else if (inputContext->cursorIndex > 0) {
+                    const char* indexStr = &inputContext->buffer.arr[inputContext->cursorLine].arr[inputContext->cursorIndex];
+                    const char* indexStrCopy = indexStr;
+                    Uint32 code = SDL_StepBackUTF8(inputContext->buffer.arr[inputContext->cursorLine].arr, &indexStr);
+                    Uint32 code_width = (Uint32)(indexStrCopy - indexStr);
+
+                    DYNAMIC_ARRAY_REMOVE_SELECTION(inputContext->buffer.arr[inputContext->cursorLine], inputContext->cursorIndex - code_width, code_width);
+                    inputContext->cursorIndex -= code_width;
+                    if (inputContext->cursorIndex < 0) {
+                        inputContext->cursorIndex = 0;
+                    }
+
+                    InputContextModifiedLinesAppend(inputContext, inputContext->cursorLine);
+                    inputContext->flags |= INPUT_CONTEXT_BUFFER_WAS_MODIFIED;
                 }
-                InputContextModifiedLinesAppend(inputContext, inputContext->cursorLine - 1);
-
-                inputContext->cursorLine--;
-                inputContext->flags |= INPUT_CONTEXT_BUFFER_WAS_MODIFIED;
-            } else if (inputContext->cursorIndex > 0) {
-                const char* indexStr = &inputContext->buffer.arr[inputContext->cursorLine].arr[inputContext->cursorIndex];
-                const char* indexStrCopy = indexStr;
-                Uint32 code = SDL_StepBackUTF8(inputContext->buffer.arr[inputContext->cursorLine].arr, &indexStr);
-                Uint32 code_width = (Uint32)(indexStrCopy - indexStr);
-
-                DYNAMIC_ARRAY_REMOVE_SELECTION(inputContext->buffer.arr[inputContext->cursorLine], inputContext->cursorIndex - code_width, code_width);
-                inputContext->cursorIndex -= code_width;
-                if (inputContext->cursorIndex < 0) {
-                    inputContext->cursorIndex = 0;
+            } else {
+                int startLineIndex = 0;
+                int endLineIndex = 0;
+                int startIndex = 0;
+                int endIndex = 0;
+                if (inputContext->cursorLine >= inputContext->highlightStartLineIndex) {
+                    endLineIndex = inputContext->cursorLine;
+                    endIndex = inputContext->cursorIndex;
+                    startLineIndex = inputContext->highlightStartLineIndex;
+                    startIndex = inputContext->highlightStartIndex;
+                } else {
+                    endLineIndex = inputContext->highlightStartLineIndex;
+                    endIndex = inputContext->highlightStartIndex;
+                    startLineIndex = inputContext->cursorLine;
+                    startIndex = inputContext->cursorIndex;
                 }
 
-                InputContextModifiedLinesAppend(inputContext, inputContext->cursorLine);
-                inputContext->flags |= INPUT_CONTEXT_BUFFER_WAS_MODIFIED;
+                if (startLineIndex == endLineIndex) {
+                    if (startIndex > endIndex) {
+                        int temp = endIndex;
+                        endIndex = startIndex;
+                        startIndex = temp;
+                    }
+
+                    DYNAMIC_ARRAY_REMOVE_SELECTION(inputContext->buffer.arr[startLineIndex], startIndex, endIndex - startIndex);
+                    InputContextModifiedLinesAppend(inputContext, startLineIndex);
+                    inputContext->cursorIndex = startIndex;
+                    inputContext->flags |= INPUT_CONTEXT_BUFFER_WAS_MODIFIED;
+                } else {
+                    // Handle the ending line
+                    DYNAMIC_ARRAY_REMOVE_SELECTION(inputContext->buffer.arr[endLineIndex], 0, endIndex);
+                    struct CharArray {
+                        char* arr;
+                        size_t len;
+                        size_t capacity;
+                    } tempArr;
+                    DYNAMIC_ARRAY_INIT(tempArr);
+                    DYNAMIC_ARRAY_INSERT_ARRAY(tempArr, inputContext->buffer.arr[endLineIndex], 0);
+
+                    // Handle the middle chunk of lines
+                    for (int i = startLineIndex + 1; i <= endLineIndex; i++) {
+                        text_line_destroy(&inputContext->buffer.arr[startLineIndex + 1]);
+                        DYNAMIC_ARRAY_REMOVE(inputContext->buffer, startLineIndex + 1);
+                        InputContextUpdateModifiedLineIndicesAfterRemoval(inputContext, startLineIndex + 1);
+                    }
+
+                    // Handle the starting line
+                    DYNAMIC_ARRAY_REMOVE_SELECTION(inputContext->buffer.arr[startLineIndex], startIndex, inputContext->buffer.arr[startLineIndex].len - startIndex);
+                    DYNAMIC_ARRAY_INSERT_ARRAY(inputContext->buffer.arr[startLineIndex], tempArr, inputContext->buffer.arr[startLineIndex].len);
+                    InputContextModifiedLinesAppend(inputContext, startLineIndex);
+
+                    DYNAMIC_ARRAY_FREE(tempArr);
+                    inputContext->cursorLine = startLineIndex;
+                    inputContext->cursorIndex = startIndex;
+                    inputContext->flags |= INPUT_CONTEXT_BUFFER_WAS_MODIFIED;
+                }
             }
         } break;
 
@@ -993,6 +1088,31 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
                 DYNAMIC_ARRAY_FREE(charArray);
             }
         } break;
+
+        case SDLK_A: {
+            if (key_states[SDL_SCANCODE_LCTRL]) {
+                inputContext->highlightStartLineIndex = 0;
+                inputContext->highlightStartIndex = 0;
+                inputContext->cursorLine = inputContext->buffer.len - 1;
+                inputContext->cursorIndex = inputContext->buffer.arr[inputContext->cursorLine].len;
+            }
+        } break;
+
+        case SDLK_LSHIFT: {
+            inputContext->lShiftDown = true;
+            inputContext->highlightStartIndex = inputContext->cursorIndex;
+            inputContext->highlightStartLineIndex = inputContext->cursorLine;
+
+            inputContext->flags |= INPUT_CONTEXT_CURSOR_WAS_MODIFIED;
+        } break;
+        }
+    } break;
+
+    case SDL_EVENT_KEY_UP: {
+        switch (event->key.key) {
+        case SDLK_LSHIFT: {
+            inputContext->lShiftDown = false;
+        } break;
         }
     } break;
 
@@ -1004,13 +1124,29 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
 
             InputContextSetHorizontalScrollOffset(inputContext, inputContext->scrollHorizontalOffset + event->wheel.x * scrollFactor);
             InputContextSetVerticalScrollOffset(inputContext, inputContext->scrollVerticalOffset - event->wheel.y * scrollFactor);
+            UpdateRenderIndexBounds(inputContext);
         }
     } break;
 
     case SDL_EVENT_MOUSE_BUTTON_DOWN: {
         if (event->button.button == SDL_BUTTON_LEFT) {
             inputContext->mouseLeftDown = true;
-            InputContextCalculateBufferPosFromMousePos(inputContext, &inputContext->cursorLine, &inputContext->cursorIndex, false);
+
+            int mousePixelX = (int)(inputContext->app_context->displayScale * event->button.x);
+            int mousePixelY = (int)(inputContext->app_context->displayScale * event->button.y);
+
+            if (
+                mousePixelX < inputContext->layout.x ||
+                mousePixelY < inputContext->layout.y ||
+                mousePixelX > inputContext->layout.x + inputContext->layout.width ||
+                mousePixelY > inputContext->layout.y + inputContext->layout.height) {
+                SDL_StopTextInput(inputContext->app_context->window);
+                inputContext->inputContextHasFocus = false;
+            } else {
+                SDL_StartTextInput(inputContext->app_context->window);
+                InputContextCalculateBufferPosFromMousePos(inputContext, &inputContext->cursorLine, &inputContext->cursorIndex);
+                inputContext->inputContextHasFocus = true;
+            }
 
             inputContext->highlightStartIndex = inputContext->cursorIndex;
             inputContext->highlightStartLineIndex = inputContext->cursorLine;
@@ -1044,32 +1180,10 @@ int InputContextProcessEvent(InputContext* inputContext, SDL_Event* event) {
                 SDL_SetCursor(SDL_GetDefaultCursor());
             }
         }
-
-        if (inputContext->mouseLeftDown) {
-            InputContextCalculateBufferPosFromMousePos(inputContext, &inputContext->cursorLine, &inputContext->cursorIndex, true);
-            inputContext->flags |= INPUT_CONTEXT_CURSOR_WAS_MODIFIED;
-        }
     } break;
     }
 
     return 0;
-}
-
-static inline void UpdateRenderIndexBounds(InputContext* inputContext) {
-    int offsetY = 0;
-    inputContext->lineRenderOffsetY = 0;
-    inputContext->lineRenderIndexStart = 0;
-    inputContext->lineRenderIndexEnd = 0;
-    for (int i = 0; i < inputContext->buffer.len; i++) {
-        inputContext->lineRenderIndexEnd = i + 1;
-        if (offsetY - inputContext->scrollVerticalOffset < -inputContext->line_spacing) {
-            inputContext->lineRenderIndexStart = i + 1;
-            inputContext->lineRenderOffsetY += inputContext->line_spacing * inputContext->buffer.arr[i].renderInfo.len;
-        } else if ((offsetY + inputContext->line_spacing) - inputContext->scrollVerticalOffset > inputContext->layout.height) {
-            break;
-        }
-        offsetY += inputContext->buffer.arr[i].renderInfo.len * inputContext->line_spacing;
-    }
 }
 
 static inline void InputContextUpdateLine(InputContext* inputContext, int index, bool fontWasChanged) {
@@ -1137,6 +1251,11 @@ static inline void InputContextUpdateLine(InputContext* inputContext, int index,
 }
 
 int InputContextRefresh(InputContext* inputContext) {
+    if (inputContext->mouseLeftDown && inputContext->inputContextHasFocus) {
+        InputContextCalculateBufferPosFromMousePos(inputContext, &inputContext->cursorLine, &inputContext->cursorIndex);
+        inputContext->flags |= INPUT_CONTEXT_CURSOR_WAS_MODIFIED;
+    }
+
     if (
         inputContext->flags & INPUT_CONTEXT_BUFFER_WAS_MODIFIED ||
         inputContext->flags & INPUT_CONTEXT_LAYOUT_WAS_MODIFIED ||
@@ -1163,6 +1282,7 @@ int InputContextRefresh(InputContext* inputContext) {
 
         if (inputContext->layoutMode != INPUT_CONTEXT_LAYOUT_MODE_WRAP) {
             inputContext->maxHeight = (int)inputContext->buffer.len * inputContext->line_spacing;
+            inputContext->scrollMaxVerticalOffset = inputContext->maxHeight - inputContext->layout.height;
         }
 
         inputContext->scrollMaxHorizontalOffset = inputContext->maxLineWidth - inputContext->layout.width;
@@ -1242,43 +1362,58 @@ int InputContextRefresh(InputContext* inputContext) {
             }
         }
 
-        if (inputContext->cursorY - inputContext->scrollVerticalOffset < 0) {
-            InputContextSetVerticalScrollOffset(inputContext, inputContext->cursorY);
-        } else if (inputContext->cursorY - inputContext->scrollVerticalOffset > inputContext->layout.height - inputContext->line_spacing) {
-            InputContextSetVerticalScrollOffset(inputContext, inputContext->scrollVerticalOffset + inputContext->line_spacing);
-            if (inputContext->cursorY - inputContext->scrollVerticalOffset > inputContext->layout.height - inputContext->line_spacing) {
-                InputContextSetVerticalScrollOffset(inputContext, (inputContext->cursorY / inputContext->layout.height) * inputContext->layout.height);
-            }
-        }
+        // When text is being highlighted, position of the scroll offset will be handled when calculating
+        // the mouse's translated position in the buffer.
+        if (inputContext->mouseLeftDown == false) {
+            if (inputContext->cursorY - inputContext->scrollVerticalOffset < 0) {
+                InputContextSetVerticalScrollOffset(inputContext, inputContext->cursorY);
 
-        if (inputContext->cursorX - inputContext->scrollHorizontalOffset < 0) {
-            const char* string_copy = &inputContext->buffer.arr[inputContext->cursorLine].arr[inputContext->cursorIndex];
-            size_t psLen = inputContext->buffer.arr[inputContext->cursorLine].len - inputContext->cursorIndex;
-            Uint32 code = SDL_StepUTF8(&string_copy, &psLen);
-            char buff[5] = {0};
-            SDL_UCS4ToUTF8(code, buff);
-            int codeWidth, codeHeight;
-            TTF_GetStringSize(inputContext->font, buff, 0, &codeWidth, &codeHeight);
-            InputContextSetHorizontalScrollOffset(inputContext, inputContext->scrollHorizontalOffset - codeWidth);
+                UpdateRenderIndexBounds(inputContext);
+            } else if (inputContext->cursorY - inputContext->scrollVerticalOffset > inputContext->layout.height - inputContext->line_spacing) {
+                InputContextSetVerticalScrollOffset(inputContext, inputContext->scrollVerticalOffset + inputContext->line_spacing);
+                if (inputContext->cursorY - inputContext->scrollVerticalOffset > inputContext->layout.height - inputContext->line_spacing) {
+                    InputContextSetVerticalScrollOffset(inputContext, (inputContext->cursorY / inputContext->layout.height) * inputContext->layout.height);
+                }
+
+                UpdateRenderIndexBounds(inputContext);
+            }
 
             if (inputContext->cursorX - inputContext->scrollHorizontalOffset < 0) {
-                InputContextSetHorizontalScrollOffset(inputContext, (inputContext->cursorX / inputContext->layout.width) * inputContext->layout.width);
-            }
-        } else if (inputContext->cursorX - inputContext->scrollHorizontalOffset > inputContext->layout.width) {
-            const char* string_copy = &inputContext->buffer.arr[inputContext->cursorLine].arr[inputContext->cursorIndex];
-            Uint32 code = SDL_StepBackUTF8((const char*)inputContext->buffer.arr[inputContext->cursorLine].arr, &string_copy);
-            char buff[5] = {0};
-            SDL_UCS4ToUTF8(code, buff);
-            int codeWidth, codeHeight;
-            TTF_GetStringSize(inputContext->font, buff, 0, &codeWidth, &codeHeight);
-            InputContextSetHorizontalScrollOffset(inputContext, inputContext->scrollHorizontalOffset + codeWidth);
+                const char* string_copy = &inputContext->buffer.arr[inputContext->cursorLine].arr[inputContext->cursorIndex];
+                size_t psLen = inputContext->buffer.arr[inputContext->cursorLine].len - inputContext->cursorIndex;
+                Uint32 code = SDL_StepUTF8(&string_copy, &psLen);
+                char buff[5] = {0};
+                SDL_UCS4ToUTF8(code, buff);
+                int codeWidth, codeHeight;
+                TTF_GetStringSize(inputContext->font, buff, 0, &codeWidth, &codeHeight);
+                InputContextSetHorizontalScrollOffset(inputContext, inputContext->scrollHorizontalOffset - codeWidth);
 
-            if (inputContext->cursorX - inputContext->scrollHorizontalOffset > inputContext->layout.width) {
-                InputContextSetHorizontalScrollOffset(inputContext, (inputContext->cursorX / inputContext->layout.width) * inputContext->layout.width);
+                if (inputContext->cursorX - inputContext->scrollHorizontalOffset < 0) {
+                    InputContextSetHorizontalScrollOffset(inputContext, (inputContext->cursorX / inputContext->layout.width) * inputContext->layout.width);
+                }
+
+                UpdateRenderIndexBounds(inputContext);
+            } else if (inputContext->cursorX - inputContext->scrollHorizontalOffset > inputContext->layout.width) {
+                const char* string_copy = &inputContext->buffer.arr[inputContext->cursorLine].arr[inputContext->cursorIndex];
+                Uint32 code = SDL_StepBackUTF8((const char*)inputContext->buffer.arr[inputContext->cursorLine].arr, &string_copy);
+                char buff[5] = {0};
+                SDL_UCS4ToUTF8(code, buff);
+                int codeWidth, codeHeight;
+                TTF_GetStringSize(inputContext->font, buff, 0, &codeWidth, &codeHeight);
+                InputContextSetHorizontalScrollOffset(inputContext, inputContext->scrollHorizontalOffset + codeWidth);
+
+                if (inputContext->cursorX - inputContext->scrollHorizontalOffset > inputContext->layout.width) {
+                    InputContextSetHorizontalScrollOffset(inputContext, (inputContext->cursorX / inputContext->layout.width) * inputContext->layout.width);
+                }
+
+                UpdateRenderIndexBounds(inputContext);
             }
         }
 
-        if (inputContext->mouseLeftDown == false) {
+        if (
+            (inputContext->mouseLeftDown == false) &&
+            ((inputContext->lShiftDown == false) ||
+             ((inputContext->flags & INPUT_CONTEXT_BUFFER_WAS_MODIFIED) == true))) {
             inputContext->highlightStartLineIndex = inputContext->cursorLine;
             inputContext->highlightStartIndex = inputContext->cursorIndex;
         }
@@ -1296,16 +1431,6 @@ int InputContextRefresh(InputContext* inputContext) {
     DYNAMIC_ARRAY_CLEAR(inputContext->modifiedLines);
 
     return 0;
-}
-
-void InputContextSetHorizontalScrollOffset(InputContext* inputContext, int h_scroll_amount) {
-    inputContext->scrollHorizontalOffset = SDL_clamp(h_scroll_amount, 0, inputContext->scrollMaxHorizontalOffset);
-    UpdateRenderIndexBounds(inputContext);
-}
-
-void InputContextSetVerticalScrollOffset(InputContext* inputContext, int v_scroll_amount) {
-    inputContext->scrollVerticalOffset = SDL_clamp(v_scroll_amount, 0, inputContext->scrollMaxVerticalOffset);
-    UpdateRenderIndexBounds(inputContext);
 }
 
 int InputContextOpenFile(InputContext* inputContext, const char* file_path) {

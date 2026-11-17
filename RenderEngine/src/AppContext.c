@@ -579,8 +579,11 @@ int AppContextInit(AppContext* app_context, SDL_WindowFlags windowFlags, bool gp
     app_context->mouseLogicalY = 0;
     app_context->mousePixelX = 0;
     app_context->mousePixelY = 0;
+    app_context->frameDeltaTime = 0;
     app_context->deltaTime = 0;
     app_context->time = 0;
+
+    SDL_GetWindowSizeInPixels(app_context->window, &app_context->windowWidthPixels, &app_context->windowHeightPixels);
 
     return 0;
 }

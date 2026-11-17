@@ -34,7 +34,8 @@ typedef struct AppContext {
     SDL_GPUShaderFormat shaderFormat;
     float displayScale;
     double time;
-    double deltaTime;
+    float deltaTime;
+    float frameDeltaTime;
     float mouseLogicalX;
     float mouseLogicalY;
     float mousePixelX;
@@ -46,6 +47,8 @@ typedef struct AppContext {
     float refreshRate;
     float latencyEaser;
     int latencyFrameReductionCount;
+    int windowWidthPixels;
+    int windowHeightPixels;
 } AppContext;
 
 #define APP_CONTEXT_DEVICE(appContext) ((appContext).device)
@@ -72,22 +75,16 @@ int AppContextInit(AppContext* app_context, SDL_WindowFlags windowFlags, bool gp
 
 // Must be called at the start of every frame to get accurate updates of the current time value and the delta time
 static inline void AppContextUpdate(AppContext* app_context) {
+    double prevTime = app_context->time;
     app_context->time = (double)SDL_GetTicksNS() / 1'000'000'000.0;
-    app_context->deltaTime = app_context->time - app_context->lastRenderFrameTime;
+
+    app_context->deltaTime = app_context->time - prevTime;
+    app_context->frameDeltaTime = app_context->time - app_context->lastRenderFrameTime;
 
     SDL_GetMouseState(&app_context->mouseLogicalX, &app_context->mouseLogicalY);
 
-    int logicalWindowSizeX, logicalWindowSizeY;
-    SDL_GetWindowSize(app_context->window, &logicalWindowSizeX, &logicalWindowSizeY);
-
-    int pixelWindowSizeX, pixelWindowSizeY;
-    SDL_GetWindowSizeInPixels(app_context->window, &pixelWindowSizeX, &pixelWindowSizeY);
-
-    float mouseScaleX = (float)pixelWindowSizeX / (float)logicalWindowSizeX;
-    float mouseScaleY = (float)pixelWindowSizeY / (float)logicalWindowSizeY;
-
-    app_context->mousePixelX = app_context->mouseLogicalX * mouseScaleX;
-    app_context->mousePixelY = app_context->mouseLogicalY * mouseScaleY;
+    app_context->mousePixelX = app_context->mouseLogicalX * app_context->displayScale;
+    app_context->mousePixelY = app_context->mouseLogicalY * app_context->displayScale;
 }
 
 static inline void AppContextProcessEvent(AppContext* app_context, SDL_Event* event) {
@@ -126,6 +123,11 @@ static inline void AppContextProcessEvent(AppContext* app_context, SDL_Event* ev
 
     case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED: {
         app_context->displayScale = SDL_GetWindowDisplayScale(app_context->window);
+    } break;
+
+    case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED: {
+        app_context->windowWidthPixels = event->window.data1;
+        app_context->windowHeightPixels = event->window.data2;
     } break;
     }
 }

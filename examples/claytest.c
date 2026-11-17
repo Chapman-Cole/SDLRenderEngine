@@ -136,8 +136,6 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     Clay_Initialize(arena, (Clay_Dimensions){640, 480}, (Clay_ErrorHandler){HandleClayErrors});
     Clay_SetMeasureTextFunction(measureText, &fontRegistry);
 
-    SDL_StartTextInput(appContext.window);
-
     openFileMutex = SDL_CreateMutex();
 
     openFontMutex = SDL_CreateMutex();
@@ -214,9 +212,9 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
                     static int buff3_frame_counter = 0;
                     static double buff3_time_tracker = 0.0;
 
-                    buff3_fps += 1.0 / appContext.deltaTime;
+                    buff3_fps += 1.0 / appContext.frameDeltaTime;
                     buff3_frame_counter++;
-                    buff3_time_tracker += appContext.deltaTime;
+                    buff3_time_tracker += appContext.frameDeltaTime;
 
                     if (buff3_time_tracker >= 0.1) {
                         buff3_len = SDL_snprintf(buff3, 200, "FPS: %d", (int)(buff3_fps / (double)buff3_frame_counter));
@@ -244,6 +242,15 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
                     buff5_len = SDL_snprintf(buff5, 200, "line %d\nlines: %d", inputContext.cursorLine, inputContext.buffer.len);
 
                     CLAY_TEXT(((Clay_String){.chars = buff5, .length = buff5_len, .isStaticallyAllocated = false}), {.fontSize = 12, .fontId = HackRegular12, .textColor = {255, 255, 255, 255}});
+                }
+
+                CLAY(CLAY_ID("SideBarElement6"), sidebarItemConfig) {
+                    static char buff6[200] = {0};
+                    static int buff6_len = 0;
+
+                    buff6_len = SDL_snprintf(buff6, 200, "start: %d\nend: %d", inputContext.lineRenderIndexStart, inputContext.lineRenderIndexEnd);
+
+                    CLAY_TEXT(((Clay_String){.chars = buff6, .length = buff6_len, .isStaticallyAllocated = false}), {.fontSize = 12, .fontId = HackRegular12, .textColor = {255, 255, 255, 255}});
                 }
             }
 
@@ -292,8 +299,6 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
 void SDL_AppQuit(void* appstate, SDL_AppResult result) {
     SDL_DestroyMutex(openFontMutex);
     SDL_DestroyMutex(openFileMutex);
-
-    SDL_StopTextInput(appContext.window);
 
     ClayCompositorDestroy(&clayCompositor);
 

@@ -123,6 +123,8 @@ typedef struct InputContext {
     float cursorBlinkDelay;
     float cursorBlinkTimer;
     bool cursorWasInBounds;
+    bool inputContextHasFocus;
+    bool lShiftDown;
     SDL_Cursor* textCursor;
 } InputContext;
 
@@ -184,9 +186,14 @@ static inline void InputContextSetLayoutMode(InputContext* inputContext, InputCo
     inputContext->layoutMode = mode;
 }
 
-void InputContextSetHorizontalScrollOffset(InputContext* inputContext, int h_scroll_amount);
+static inline void InputContextSetHorizontalScrollOffset(InputContext* inputContext, float h_scroll_amount) {
+    // Give 5 pixels of wiggle room to all for the cursor to show
+    inputContext->scrollHorizontalOffset = SDL_clamp(h_scroll_amount, 0, inputContext->scrollMaxHorizontalOffset + 5.0f);
+}
 
-void InputContextSetVerticalScrollOffset(InputContext* inputContext, int v_scroll_amount);
+static inline void InputContextSetVerticalScrollOffset(InputContext* inputContext, float v_scroll_amount) {
+    inputContext->scrollVerticalOffset = SDL_clamp(v_scroll_amount, 0, inputContext->scrollMaxVerticalOffset);
+}
 
 static inline void InputContextSetTabWidth(InputContext* inputContext, int tabWidth) {
     inputContext->tabWidth = tabWidth;
